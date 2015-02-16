@@ -5,6 +5,7 @@ module TOML
   # A TOML Table. Just a convenience alias.
   alias Table = Hash(String, Type)
 
+  # Parses a string, returning a `TOML::Table`.
   def self.parse(string)
     Parser.parse(string)
   end
