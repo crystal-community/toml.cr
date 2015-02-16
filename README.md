@@ -1,6 +1,6 @@
 ### crystal-toml
 
-A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/).
+A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.4.0 version of TOML.
 
 [Documentation](http://manastech.github.io/crystal-toml/)
 
