@@ -2,6 +2,8 @@
 
 A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/).
 
+[Documentation](http://manastech.github.io/crystal-toml/)
+
 #### Projectfile
 
 ```crystal
