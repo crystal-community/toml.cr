@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link href="css/style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<h3>crystal-toml</h3>
+
+<p>A <a href="https://github.com/toml-lang/toml" target="_blank">TOML</a> parser for <a href="http://crystal-lang.org/" target="_blank">Crystal</a>.</p>
+
+<h4>Projectfile</h4>
+
+<pre><code>deps <span class="k">do</span>
+  github <span class="s">"manastech/crystal-toml"</span>
+<span class="k">end</span></code></pre>
+
+<h4>Usage</h4>
+
+<pre><code><span class="k">require</span> <span class="s">"toml"</span>
+
+toml_string <span class="o">=</span> <span class="s">%(
+  title = "TOML Example"
+
+  [owner]
+  name = "Lance Uppercut"
+  dob = 1979-05-27T07:32:00Z
+)</span>
+
+toml <span class="o">=</span> <span class="t">TOML</span>.parse(toml_string)
+puts toml[<span class="s">"title"</span>] <span class="c">#=> "TOML Example"</span>
+
+owner <span class="o">=</span> toml[<span class="s">"owner"</span>] <span class="k">as</span> <span class="t">Hash</span>
+puts owner[<span class="s">"name"</span>] <span class="c">#=> "Lance Uppercut"</span>
+puts owner[<span class="s">"dob"</span>]  <span class="c">#=> "1979-05-27 07:32:00 UTC"</span></code></pre>
+</body>
+</html>
