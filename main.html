@@ -7,7 +7,7 @@
 <body>
 <h3>crystal-toml</h3>
 
-<p>A <a href="https://github.com/toml-lang/toml" target="_blank">TOML</a> parser for <a href="http://crystal-lang.org/" target="_blank">Crystal</a>.</p>
+<p>A <a href="https://github.com/toml-lang/toml" target="_blank">TOML</a> parser for <a href="http://crystal-lang.org/" target="_blank">Crystal</a>, compliant with the v0.4.0 version of TOML.</p>
 
 <p><a href="http://manastech.github.io/crystal-toml/" target="_blank">Documentation</a></p>
 
@@ -35,5 +35,9 @@ puts toml[<span class="s">"title"</span>] <span class="c">#=> "TOML Example"</sp
 owner <span class="o">=</span> toml[<span class="s">"owner"</span>] <span class="k">as</span> <span class="t">Hash</span>
 puts owner[<span class="s">"name"</span>] <span class="c">#=> "Lance Uppercut"</span>
 puts owner[<span class="s">"dob"</span>]  <span class="c">#=> "1979-05-27 07:32:00 UTC"</span></code></pre>
+
+<h4>Limitations</h4>
+
+<p>Crystal doesn't (yet!) handle timezones, so parsed times are always considered UTC.</p>
 </body>
 </html>
