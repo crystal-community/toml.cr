@@ -1,4 +1,6 @@
-### crystal-toml [![Build Status](https://travis-ci.org/manastech/crystal-toml.png)](https://travis-ci.org/manastech/crystal-toml)
+### crystal-toml
+
+[![Build Status](https://travis-ci.org/manastech/crystal-toml.png)](https://travis-ci.org/manastech/crystal-toml)
 
 A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.4.0 version of TOML.
 
