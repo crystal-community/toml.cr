@@ -1,4 +1,4 @@
-### crystal-toml
+# crystal-toml
 
 [![Build Status](https://travis-ci.org/manastech/crystal-toml.png)](https://travis-ci.org/manastech/crystal-toml)
 
@@ -6,7 +6,7 @@ A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-
 
 [Documentation](http://manastech.github.io/crystal-toml/)
 
-#### Projectfile
+### Projectfile
 
 ```crystal
 deps do
@@ -14,7 +14,7 @@ deps do
 end
 ```
 
-#### Usage
+### Usage
 
 ```crystal
 require "toml"
@@ -35,6 +35,6 @@ puts owner["name"] #=> "Lance Uppercut"
 puts owner["dob"]  #=> "1979-05-27 07:32:00 UTC"
 ```
 
-#### Limitations
+### Limitations
 
 Crystal doesn't (yet!) handle timezones, so parsed times are always considered UTC.
