@@ -1,8 +1,8 @@
-language: objective-c
-before_install:
-- brew update
-install:
-- brew tap manastech/crystal
-- brew install crystal --with-llvm
+language: c
+before_install: |
+  curl http://dist.crystal-lang.org/apt/setup.sh | sudo bash
+  sudo apt-get -q update
+install: |
+  sudo apt-get install crystal
 script:
 - crystal spec
