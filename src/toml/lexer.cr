@@ -456,31 +456,34 @@ class TOML::Lexer
       microseconds = 0
     end
 
+    negative = false
     case current_char
     when 'Z'
       next_char
     when '+', '-'
+      negative = current_char == '-'
       hour_offset = consume_time_component 2, "expected hour offset digit"
       raise "expected ':'" unless next_char == ':'
       minute_offset = consume_time_component 2, "expected minute offset digit"
       next_char
-      # TODO: support time zone
     else
       unexpected_char
     end
 
     time = Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc)
+    time += (negative ? hour_offset : -hour_offset).hours if hour_offset
+    time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
 
     @token.type = :TIME
     @token.time_value = time
   end
 
   private def consume_time_component(length, error_msg)
-    hour = 0
+    value = 0
     length.times do
-      hour = 10 * hour + next_char.to_i { raise error_msg }
+      value = 10 * value + next_char.to_i { raise error_msg }
     end
-    hour
+    value
   end
 
   private def consume_key(start_pos = current_pos)
