@@ -225,8 +225,7 @@ class TOML::Parser
         new_value = parse_value
         ary << new_value
 
-        # TODO: use crystal_type_id until Crystal supports class comparison
-        if previous_value && previous_value.crystal_type_id != new_value.crystal_type_id
+        if previous_value && previous_value.class != new_value.class
           raise "cannot mix types in array"
         end
 
