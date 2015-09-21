@@ -38,8 +38,8 @@ private def compare(toml_hash : Hash, json_hash : Hash)
 end
 
 private def compare(toml_array : Array, json_array : Array)
-  if toml_array.length != json_array.length
-    fail "array lengths differ"
+  if toml_array.size != json_array.size
+    fail "array sizes differ"
   end
 
   toml_array.zip(json_array) do |toml_value, json_value|

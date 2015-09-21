@@ -3,7 +3,7 @@ class TOML::Lexer
   getter token
 
   def initialize(string)
-    @reader = CharReader.new(string)
+    @reader = Char::Reader.new(string)
     @token = Token.new
     @line_number = 1
     @column_number = 1
