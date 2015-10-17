@@ -7,7 +7,7 @@ class TOML::Lexer
     @token = Token.new
     @line_number = 1
     @column_number = 1
-    @string_io = StringIO.new
+    @io = MemoryIO.new
   end
 
   def next_token
@@ -44,7 +44,7 @@ class TOML::Lexer
       next_char :"="
     when '0'
       consume_number leading_zero: true
-    when '1' .. '9', '+'
+    when '1'..'9', '+'
       consume_number
     when '-'
       consume_number negative: true
@@ -101,7 +101,7 @@ class TOML::Lexer
   end
 
   private def consume_basic_string
-    @string_io.clear
+    @io.clear
 
     while true
       case current_char
@@ -116,16 +116,16 @@ class TOML::Lexer
       when '\n'
         raise "newline is not allowed in basic string"
       else
-        @string_io << current_char
+        @io << current_char
         next_char
       end
     end
 
-    @token.string_value = @string_io.to_s
+    @token.string_value = @io.to_s
   end
 
   private def consume_multine_basic_string
-    @string_io.clear
+    @io.clear
 
     if next_char == '\n'
       newline
@@ -140,10 +140,10 @@ class TOML::Lexer
             next_char
             break
           else
-            @string_io << %("")
+            @io << %("")
           end
         else
-          @string_io << '"'
+          @io << '"'
         end
         next_char
       when '\\'
@@ -166,17 +166,17 @@ class TOML::Lexer
         end
       when '\n'
         newline
-        @string_io << '\n'
+        @io << '\n'
         next_char
       when '\0'
         raise "unterminated string literal"
       else
-        @string_io << current_char
+        @io << current_char
         next_char
       end
     end
 
-    @token.string_value = @string_io.to_s
+    @token.string_value = @io.to_s
   end
 
   private def consume_literal_string
@@ -214,7 +214,7 @@ class TOML::Lexer
   end
 
   private def consume_multine_literal_string
-    @string_io.clear
+    @io.clear
 
     if next_char == '\n'
       newline
@@ -229,43 +229,43 @@ class TOML::Lexer
             next_char
             break
           else
-            @string_io << %('')
+            @io << %('')
           end
         else
-          @string_io << '\''
-          @string_io << current_char
+          @io << '\''
+          @io << current_char
         end
       when '\n'
         newline
-        @string_io << '\n'
+        @io << '\n'
       when '\0'
         raise "unterminated string literal"
       else
-        @string_io << current_char
+        @io << current_char
       end
       next_char
     end
 
-    @token.string_value = @string_io.to_s
+    @token.string_value = @io.to_s
   end
 
   private def consume_escape
     case current_char
     when 'b'
-      @string_io << '\b'
+      @io << '\b'
     when 't'
-      @string_io << '\t'
+      @io << '\t'
     when 'n'
-      @string_io << '\n'
+      @io << '\n'
     when 'f'
-      @string_io << '\f'
+      @io << '\f'
     when 'r'
-      @string_io << '\r'
+      @io << '\r'
     when 'u'
-      @string_io << consume_unicode_scalar
+      @io << consume_unicode_scalar
       return
     when '\\', '\'', '"'
-      @string_io << current_char
+      @io << current_char
     else
       raise "unknown escape: \\#{current_char}"
     end
@@ -317,7 +317,7 @@ class TOML::Lexer
 
     while true
       case next_char
-      when '0' .. '9'
+      when '0'..'9'
         num = num * 10 + current_char.to_i
         last_is_underscore = false
         count += 1

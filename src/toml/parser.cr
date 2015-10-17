@@ -87,7 +87,6 @@ class TOML::Parser
     end
   end
 
-
   private def parse_table_header(root_table)
     next_token
 

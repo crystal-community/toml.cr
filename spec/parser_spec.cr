@@ -27,13 +27,13 @@ describe Parser do
     hello = true
     world = false
     ),
-    {"hello": true, "world": false}
+            {"hello": true, "world": false}
 
   it_parses %(
     true = false
     false = true
     ),
-    {"true": false, "false": true}
+            {"true": false, "false": true}
 
   it_parses "a = 987_654", {"a": 987_654}
   it_parses "a = 1.0", {"a": 1.0}
@@ -63,7 +63,7 @@ describe Parser do
     one = 1
     two = 2
     ),
-    {"table": {"one": 1, "two": 2}}
+            {"table": {"one": 1, "two": 2}}
 
   it_parses %(
     [table1]
@@ -72,19 +72,19 @@ describe Parser do
     [table2]
     two = 2
     ),
-    {"table1": {"one": 1}, "table2": {"two": 2}}
+            {"table1": {"one": 1}, "table2": {"two": 2}}
 
   it_parses %(
     [foo.bar.baz]
     one = 1
     ),
-    {"foo": {"bar": {"baz": {"one": 1}}}}
+            {"foo": {"bar": {"baz": {"one": 1}}}}
 
   it_parses %(
     [ foo . bar . baz ]
     one = 1
     ),
-    {"foo": {"bar": {"baz": {"one": 1}}}}
+            {"foo": {"bar": {"baz": {"one": 1}}}}
 
   it_parses %(
     [a.b]
@@ -93,28 +93,28 @@ describe Parser do
     [a]
     d = 2
     ),
-    {"a": {"b": {"c": 1}, "d": 2}}
+            {"a": {"b": {"c": 1}, "d": 2}}
 
   it_parses %(
     point = { x = 1, y = 2 }
     ),
-    {"point": {"x": 1, "y": 2}}
+            {"point": {"x": 1, "y": 2}}
 
   it_parses %(
     "foo" = 1
     ),
-    {"foo": 1}
+            {"foo": 1}
 
   it_parses %(
     [dog."tater.man"]
     type = "pug"
     ),
-    { "dog": { "tater.man": { "type": "pug" } } }
+            {"dog": {"tater.man": {"type": "pug"}}}
 
   it_parses %(
     [foo]
     ),
-    {"foo": Table.new}
+            {"foo": Table.new}
 
   it_parses %(
     [[products]]
@@ -128,13 +128,13 @@ describe Parser do
     sku = 284758393
     color = "gray"
     ),
-    {
-      "products": [
-        { "name": "Hammer", "sku": 738594937 },
-        Table.new,
-        { "name": "Nail", "sku": 284758393, "color": "gray" }
-      ]
-    }
+            {
+              "products": [
+                {"name": "Hammer", "sku": 738594937},
+                Table.new,
+                {"name": "Nail", "sku": 284758393, "color": "gray"},
+              ],
+            }
 
   it_parses %(
     [[fruit]]
@@ -144,23 +144,23 @@ describe Parser do
         color = "red"
         shape = "round"
     ),
-    {
-      "fruit": [
-        {
-          "name": "apple",
-          "physical": {
-            "color": "red",
-            "shape": "round"
-          },
-        },
-      ]
-    }
+            {
+              "fruit": [
+                {
+                  "name":     "apple",
+                  "physical": {
+                    "color": "red",
+                    "shape": "round",
+                  },
+                },
+              ],
+            }
 
   it_parses %(
     [[fruit.variety]]
     name = "red delicious"
     ),
-    {"fruit": {"variety": [{"name": "red delicious"}]}}
+            {"fruit": {"variety": [{"name": "red delicious"}]}}
 
   it_parses %(
     [[fruit]]
@@ -169,16 +169,16 @@ describe Parser do
       [[fruit.variety]]
       name = "red delicious"
     ),
-    {
-      "fruit": [
-        {
-          "name": "apple",
-          "variety": [
-            { "name": "red delicious" },
-          ]
-        },
-      ]
-    }
+            {
+              "fruit": [
+                {
+                  "name":    "apple",
+                  "variety": [
+                    {"name": "red delicious"},
+                  ],
+                },
+              ],
+            }
 
   it_parses %(
     [[fruit]]
@@ -200,27 +200,27 @@ describe Parser do
       [[fruit.variety]]
         name = "plantain"
     ),
-    {
-      "fruit": [
-        {
-          "name": "apple",
-          "physical": {
-            "color": "red",
-            "shape": "round"
-          },
-          "variety": [
-            { "name": "red delicious" },
-            { "name": "granny smith" }
-          ]
-        },
-        {
-          "name": "banana",
-          "variety": [
-            { "name": "plantain" }
-          ]
-        }
-      ]
-    }
+            {
+              "fruit": [
+                {
+                  "name":     "apple",
+                  "physical": {
+                    "color": "red",
+                    "shape": "round",
+                  },
+                  "variety": [
+                    {"name": "red delicious"},
+                    {"name": "granny smith"},
+                  ],
+                },
+                {
+                  "name":    "banana",
+                  "variety": [
+                    {"name": "plantain"},
+                  ],
+                },
+              ],
+            }
 
   it_raises %(a = [1, 2)
   it_raises %(a = [1,,2])
