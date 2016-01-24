@@ -62,7 +62,7 @@ describe TOML do
   files.each do |file|
     it "parses valid case '#{file}'" do
       toml = TOML.parse_file(file)
-      json = JSON.parse File.read("#{file[0..-5]}json")
+      json = JSON.parse(File.read("#{file[0..-5]}json")).raw
 
       compare toml, (json as Hash)
     end
