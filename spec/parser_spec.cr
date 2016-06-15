@@ -18,37 +18,37 @@ end
 
 describe Parser do
   it_parses "", {} of String => Type
-  it_parses "a = true", {"a": true}
-  it_parses "a = false", {"a": false}
-  it_parses "bare_key = false", {"bare_key": false}
-  it_parses "bare-key = false", {"bare-key": false}
+  it_parses "a = true", {"a" => true}
+  it_parses "a = false", {"a" => false}
+  it_parses "bare_key = false", {"bare_key" => false}
+  it_parses "bare-key = false", {"bare-key" => false}
 
   it_parses %(
     hello = true
     world = false
     ),
-    {"hello": true, "world": false}
+    {"hello" => true, "world" => false}
 
   it_parses %(
     true = false
     false = true
     ),
-    {"true": false, "false": true}
+    {"true" => false, "false" => true}
 
-  it_parses "a = 987_654", {"a": 987_654}
-  it_parses "a = 1.0", {"a": 1.0}
-  it_parses %(a = "hello"), {"a": "hello"}
-  it_parses "a = 1979-05-27T07:32:00Z", {"a": Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
-  it_parses "a = 1979-05-27T00:32:00-07:00", {"a": Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
+  it_parses "a = 987_654", {"a" => 987_654}
+  it_parses "a = 1.0", {"a" => 1.0}
+  it_parses %(a = "hello"), {"a" => "hello"}
+  it_parses "a = 1979-05-27T07:32:00Z", {"a" => Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
+  it_parses "a = 1979-05-27T00:32:00-07:00", {"a" => Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
 
-  it_parses "a = [1, 2, 3]", {"a": [1, 2, 3]}
-  it_parses "a = [[[[]]]]", {"a": [[[[] of Type] of Type] of Type]}
+  it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
+  it_parses "a = [[[[]]]]", {"a" => [[[[] of Type] of Type] of Type]}
 
   it_parses %(
     a = [
       1, 2, 3
     ]
-    ), {"a": [1, 2, 3]}
+    ), {"a" => [1, 2, 3]}
 
   it_parses %(
     a = [
@@ -56,14 +56,14 @@ describe Parser do
       2,
       3,
     ]
-    ), {"a": [1, 2, 3]}
+    ), {"a" => [1, 2, 3]}
 
   it_parses %(
     [table]
     one = 1
     two = 2
     ),
-    {"table": {"one": 1, "two": 2}}
+    {"table" => {"one" => 1, "two" => 2}}
 
   it_parses %(
     [table1]
@@ -72,19 +72,19 @@ describe Parser do
     [table2]
     two = 2
     ),
-    {"table1": {"one": 1}, "table2": {"two": 2}}
+    {"table1" => {"one" => 1}, "table2" => {"two" => 2}}
 
   it_parses %(
     [foo.bar.baz]
     one = 1
     ),
-    {"foo": {"bar": {"baz": {"one": 1}}}}
+    {"foo" => {"bar" => {"baz" => {"one" => 1}}}}
 
   it_parses %(
     [ foo . bar . baz ]
     one = 1
     ),
-    {"foo": {"bar": {"baz": {"one": 1}}}}
+    {"foo" => {"bar" => {"baz" => {"one" => 1}}}}
 
   it_parses %(
     [a.b]
@@ -93,28 +93,28 @@ describe Parser do
     [a]
     d = 2
     ),
-    {"a": {"b": {"c": 1}, "d": 2}}
+    {"a" => {"b" => {"c" => 1}, "d" => 2}}
 
   it_parses %(
     point = { x = 1, y = 2 }
     ),
-    {"point": {"x": 1, "y": 2}}
+    {"point" => {"x" => 1, "y" => 2}}
 
   it_parses %(
     "foo" = 1
     ),
-    {"foo": 1}
+    {"foo" => 1}
 
   it_parses %(
     [dog."tater.man"]
     type = "pug"
     ),
-    {"dog": {"tater.man": {"type": "pug"}}}
+    {"dog" => {"tater.man" => {"type" => "pug"}}}
 
   it_parses %(
     [foo]
     ),
-    {"foo": Table.new}
+    {"foo" => Table.new}
 
   it_parses %(
     [[products]]
@@ -129,10 +129,10 @@ describe Parser do
     color = "gray"
     ),
     {
-      "products": [
-        {"name": "Hammer", "sku": 738594937},
+      "products" => [
+        {"name" => "Hammer", "sku" => 738594937},
         Table.new,
-        {"name": "Nail", "sku": 284758393, "color": "gray"},
+        {"name" => "Nail", "sku" => 284758393, "color" => "gray"},
       ],
     }
 
@@ -145,12 +145,12 @@ describe Parser do
         shape = "round"
     ),
     {
-      "fruit": [
+      "fruit" => [
         {
-          "name":     "apple",
-          "physical": {
-            "color": "red",
-            "shape": "round",
+          "name"     => "apple",
+          "physical" => {
+            "color" => "red",
+            "shape" => "round",
           },
         },
       ],
@@ -160,7 +160,7 @@ describe Parser do
     [[fruit.variety]]
     name = "red delicious"
     ),
-    {"fruit": {"variety": [{"name": "red delicious"}]}}
+    {"fruit" => {"variety" => [{"name" => "red delicious"}]}}
 
   it_parses %(
     [[fruit]]
@@ -170,11 +170,11 @@ describe Parser do
       name = "red delicious"
     ),
     {
-      "fruit": [
+      "fruit" => [
         {
-          "name":    "apple",
-          "variety": [
-            {"name": "red delicious"},
+          "name"    => "apple",
+          "variety" => [
+            {"name" => "red delicious"},
           ],
         },
       ],
@@ -201,22 +201,22 @@ describe Parser do
         name = "plantain"
     ),
     {
-      "fruit": [
+      "fruit" => [
         {
-          "name":     "apple",
-          "physical": {
-            "color": "red",
-            "shape": "round",
+          "name"     => "apple",
+          "physical" => {
+            "color" => "red",
+            "shape" => "round",
           },
-          "variety": [
-            {"name": "red delicious"},
-            {"name": "granny smith"},
+          "variety" => [
+            {"name" => "red delicious"},
+            {"name" => "granny smith"},
           ],
         },
         {
-          "name":    "banana",
-          "variety": [
-            {"name": "plantain"},
+          "name"    => "banana",
+          "variety" => [
+            {"name" => "plantain"},
           ],
         },
       ],

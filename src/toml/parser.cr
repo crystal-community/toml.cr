@@ -274,8 +274,7 @@ class TOML::Parser
     table
   end
 
-  private delegate token, @lexer
-  private delegate next_token, @lexer
+  private delegate token, next_token, to: @lexer
 
   private def check(token_type)
     raise "expecting token '#{token_type}', not '#{token}'" unless token_type == token.type
