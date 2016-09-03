@@ -44,9 +44,13 @@ class TOML::Lexer
       next_char :"="
     when '0'
       consume_number leading_zero: true
-    when '1'..'9', '+'
+    when '1'..'9'
+      consume_number
+    when '+'
+      next_char
       consume_number
     when '-'
+      next_char
       consume_number negative: true
     when '"'
       consume_string
@@ -277,13 +281,13 @@ class TOML::Lexer
     value = 0
 
     4.times do |i|
-      value = value * 16 + (next_char.to_i(16) { raise "expecting hexadecimal number" })
+      value = value * 16 + (next_char.to_i?(16) || raise("expecting hexadecimal number"))
     end
 
-    if char_value = next_char.to_i(16) { nil }
+    if char_value = next_char.to_i?(16)
       value = value * 16 + char_value
       3.times do |i|
-        value = value * 16 + (next_char.to_i(16) { raise "expecting hexadecimal number" })
+        value = value * 16 + (next_char.to_i?(16) || raise("expecting hexadecimal number"))
       end
       next_char
     end
@@ -481,7 +485,7 @@ class TOML::Lexer
   private def consume_time_component(length, error_msg)
     value = 0
     length.times do
-      value = 10 * value + next_char.to_i { raise error_msg }
+      value = 10 * value + (next_char.to_i? || raise(error_msg))
     end
     value
   end

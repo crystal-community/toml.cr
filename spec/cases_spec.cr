@@ -8,12 +8,12 @@ end
 
 private def compare(toml : Int64, json : Hash)
   json["type"].should eq("integer")
-  (json["value"] as String).to_i64.should eq(toml)
+  json["value"].as(String).to_i64.should eq(toml)
 end
 
 private def compare(toml : Float64, json : Hash)
   json["type"].should eq("float")
-  (json["value"] as String).to_f.should eq(toml)
+  json["value"].as(String).to_f.should eq(toml)
 end
 
 private def compare(toml : String, json : Hash)
@@ -49,7 +49,7 @@ end
 
 private def compare(toml_value : Array, json_hash : Hash)
   json_hash["type"].should eq("array")
-  json_value = json_hash["value"] as Array
+  json_value = json_hash["value"].as(Array)
   compare toml_value, json_value
 end
 
@@ -64,7 +64,7 @@ describe TOML do
       toml = TOML.parse_file(file)
       json = JSON.parse(File.read("#{file[0..-5]}json")).raw
 
-      compare toml, (json as Hash)
+      compare toml, json.as(Hash)
     end
   end
 
