@@ -7,7 +7,7 @@ class TOML::Lexer
     @token = Token.new
     @line_number = 1
     @column_number = 1
-    @io = MemoryIO.new
+    @io = IO::Memory.new
   end
 
   def next_token
