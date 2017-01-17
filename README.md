@@ -6,12 +6,15 @@ A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-
 
 [Documentation](http://manastech.github.io/crystal-toml/)
 
-### Projectfile
+### Installation
 
-```crystal
-deps do
-  github "manastech/crystal-toml"
-end
+Add it to `shard.yml`:
+
+```yaml
+dependencies:
+  toml:
+    github: manastech/crystal-toml
+    branch: master
 ```
 
 ### Usage
