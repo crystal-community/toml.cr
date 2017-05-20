@@ -10,7 +10,7 @@ Add this to your application's `shard.yml`:
 
 ```yaml
 dependencies:
-  crystal-toml:
+  toml:
     github: manastech/crystal-toml
     branch: master
 ```
