@@ -16,7 +16,7 @@ class TOML::Token
     @string_value = ""
     @int_value = 0_i64
     @float_value = 0.0
-    @time_value = Time.new(0_i64)
+    @time_value = Time.new(1,1,1)
   end
 
   def to_s(io)
