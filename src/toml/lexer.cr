@@ -474,7 +474,12 @@ class TOML::Lexer
       unexpected_char
     end
 
-    time = Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc)
+    time =
+      {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
+        Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc) # 0.23.x or lower
+      {% else %}
+        Time.new(year, month, day, hour, minute, second, nanosecond: microseconds * 1000, kind: Time::Kind::Utc) # 0.24.x or higher
+      {% end %}
     time += (negative ? hour_offset : -hour_offset).hours if hour_offset
     time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
 
