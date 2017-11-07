@@ -31,7 +31,7 @@ toml_string = %(
 toml = TOML.parse(toml_string)
 puts toml["title"] #=> "TOML Example"
 
-owner = toml["owner"] as Hash
+owner = toml["owner"].as(Hash)
 puts owner["name"] #=> "Lance Uppercut"
 puts owner["dob"]  #=> "1979-05-27 07:32:00 UTC"
 ```
