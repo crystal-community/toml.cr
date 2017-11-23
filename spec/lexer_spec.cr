@@ -140,7 +140,7 @@ describe Lexer do
   it_lexes_time "1979-05-27T07:32:00Z", Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)
   it_lexes_time "1979-05-27T07:32:00-07:30", Time.new(1979, 5, 27, 15, 2, 0, kind: Time::Kind::Utc)
   it_lexes_time "1979-05-27T07:32:00+07:30", Time.new(1979, 5, 27, 0, 2, 0, kind: Time::Kind::Utc)
-  it_lexes_time "1979-05-27T07:32:00.999999-07:00", Time.new(1979, 5, 27, 14, 32, 0, 999, kind: Time::Kind::Utc)
+  it_lexes_time "1979-05-27T07:32:00.999999-07:00", Time.new(1979, 5, 27, 14, 32, 0, nanosecond: 999, kind: Time::Kind::Utc)
 
   it "lexes multinline basic string" do
     lexer = Lexer.new(%("""hello"""))
