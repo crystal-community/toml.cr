@@ -474,7 +474,7 @@ class TOML::Lexer
       unexpected_char
     end
 
-    time = Time.new(year, month, day, hour, minute, second, nanosecond: microseconds / 1000, kind: Time::Kind::Utc)
+    time = Time.new(year, month, day, hour, minute, second, nanosecond: microseconds * 1000, kind: Time::Kind::Utc)
     time += (negative ? hour_offset : -hour_offset).hours if hour_offset
     time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
 
