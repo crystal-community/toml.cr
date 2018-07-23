@@ -1,29 +1,35 @@
 require "./spec_helper"
 require "json"
 
-private def compare(toml : Bool, json : Hash)
+private def compare(toml : Bool, json : JSON::Any)
   json["type"].should eq("bool")
   json["value"].to_s.should eq(toml.to_s)
 end
 
-private def compare(toml : Int64, json : Hash)
+private def compare(toml : Int64, json : JSON::Any)
   json["type"].should eq("integer")
-  json["value"].as(String).to_i64.should eq(toml)
+  json["value"].to_s.to_i64.should eq(toml)
 end
 
-private def compare(toml : Float64, json : Hash)
+private def compare(toml : Float64, json : JSON::Any)
   json["type"].should eq("float")
-  json["value"].as(String).to_f.should eq(toml)
+  json["value"].to_s.to_f.should eq(toml)
 end
 
-private def compare(toml : String, json : Hash)
+private def compare(toml : String, json : JSON::Any)
   json["type"].should eq("string")
   json["value"].should eq(toml)
 end
 
-private def compare(toml : Time, json : Hash)
+private def compare(toml : Time, json : JSON::Any)
   json["type"].should eq("datetime")
   json["value"].should eq(toml.to_s("%Y-%m-%dT%H:%M:%SZ"))
+end
+
+private def compare(toml_hash : Hash, json : JSON::Any)
+  if json.as_h?
+    compare toml_hash, json.as_h
+  end
 end
 
 private def compare(toml_hash : Hash, json_hash : Hash)
@@ -34,6 +40,12 @@ private def compare(toml_hash : Hash, json_hash : Hash)
   toml_hash.each do |key, toml_value|
     json_value = json_hash[key]
     compare toml_value, json_value
+  end
+end
+
+private def compare(toml_array : Array, json : JSON::Any)
+  if json.as_a?
+    compare toml_array, json.as_a
   end
 end
 
