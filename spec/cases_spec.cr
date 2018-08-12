@@ -29,6 +29,8 @@ end
 private def compare(toml_hash : Hash, json : JSON::Any)
   if json.as_h?
     compare toml_hash, json.as_h
+  else
+    fail "comparison failed: #{toml_hash} vs. #{json}"
   end
 end
 
@@ -44,8 +46,12 @@ private def compare(toml_hash : Hash, json_hash : Hash)
 end
 
 private def compare(toml_array : Array, json : JSON::Any)
-  if json.as_a?
+  if json.raw.is_a?(Array)
     compare toml_array, json.as_a
+  elsif json.raw.is_a?(Hash) && json["type"]? == "array" && json["value"]?
+    compare toml_array, json["value"].as_a
+  else
+    fail "comparison failed: #{toml_array} vs. #{json}"
   end
 end
 
