@@ -38,8 +38,8 @@ describe Parser do
   it_parses "a = 987_654", {"a" => 987_654}
   it_parses "a = 1.0", {"a" => 1.0}
   it_parses %(a = "hello"), {"a" => "hello"}
-  it_parses "a = 1979-05-27T07:32:00Z", {"a" => Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
-  it_parses "a = 1979-05-27T00:32:00-07:00", {"a" => Time.new(1979, 5, 27, 7, 32, 0, kind: Time::Kind::Utc)}
+  it_parses "a = 1979-05-27T07:32:00Z", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
+  it_parses "a = 1979-05-27T00:32:00-07:00", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
 
   it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
   it_parses "a = [[[[]]]]", {"a" => [[[[] of Type] of Type] of Type]}
