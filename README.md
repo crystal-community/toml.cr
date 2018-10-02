@@ -1,6 +1,6 @@
 # crystal-toml
 
-[![Build Status](https://travis-ci.org/crystal-community/crystal-toml.png)](https://travis-ci.org/crystal-community/crystal-toml) [![docrystal.org](http://docrystal.org/badge.svg?style=round)](http://docrystal.org/github.com/crystal-community/crystal-toml>)
+[![Build Status](https://travis-ci.org/crystal-community/crystal-toml.png)](https://travis-ci.org/crystal-community/crystal-toml)
 
 A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.4.0 version of TOML.
 
