@@ -1,6 +1,6 @@
-# crystal-toml
+# toml.cr
 
-[![Build Status](https://travis-ci.org/crystal-community/crystal-toml.png)](https://travis-ci.org/crystal-community/crystal-toml)
+[![Build Status](https://travis-ci.org/crystal-community/toml.cr.png)](https://travis-ci.org/crystal-community/toml.cr)
 
 A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.4.0 version of TOML.
 
@@ -11,7 +11,7 @@ Add this to your application's `shard.yml`:
 ```yaml
 dependencies:
   toml:
-    github: crystal-community/crystal-toml
+    github: crystal-community/toml.cr
     branch: master
 ```
 
