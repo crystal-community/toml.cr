@@ -1,0 +1,6 @@
+[hardware_types]
+[hardware_types.amd]
+name = "amd"
+
+[[hardware_types.amd.components]]
+name = "margin1"
