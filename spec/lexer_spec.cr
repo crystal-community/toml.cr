@@ -94,6 +94,9 @@ describe Lexer do
   it_lexes_int "9223372036854775807", 9223372036854775807
   it_lexes_int "-9223372036854775807", -9223372036854775807
 
+  # it_lexes_float "nan", Float64::NAN # Float64::NAN cannot be compared
+  it_lexes "nan", :FLOAT
+  it_lexes_float "inf", Float64::INFINITY
   it_lexes_float "12.34", 12.34
   it_lexes_float "0.123", 0.123
   it_lexes_float "1234.567", 1234.567

@@ -22,6 +22,16 @@ describe Parser do
   it_parses "a = false", {"a" => false}
   it_parses "bare_key = false", {"bare_key" => false}
   it_parses "bare-key = false", {"bare-key" => false}
+  it_parses "1234 = false", {"1234" => false}
+
+  it_parses %("" = false), {"" => false}
+  it_parses %('' = false), {"" => false}
+  it_parses %("127.0.0.1" = "value"), {"127.0.0.1" => "value"}
+  it_parses %("character encoding" = "value"), {"character encoding" => "value"}
+  it_parses %("ʎǝʞ" = "value"), {"ʎǝʞ" => "value"}
+  it_parses %('key2' = "value"), {"key2" => "value"}
+  it_parses %('quoted "value"' = "value"), { %(quoted "value") => "value"}
+  it_parses %(quoted = 'Tom "Dubs" Preston-Werner'), {"quoted" => "Tom \"Dubs\" Preston-Werner"}
 
   it_parses %(
     hello = true
@@ -37,13 +47,79 @@ describe Parser do
 
   it_parses "a = 987_654", {"a" => 987_654}
   it_parses "a = 1.0", {"a" => 1.0}
+  it_parses %(
+    a = inf
+    b = +inf
+    c = -inf
+    ),
+    {
+      "a" => Float64::INFINITY,
+      "b" => Float64::INFINITY,
+      "c" => -Float64::INFINITY
+    }
+  # Float64::NAN cannot be compared
+  # it_parses %(
+  #   a = nan
+  #   b = +nan
+  #   c = -nan
+  #   ),
+  #   {
+  #     "a" => Float64::NAN,
+  #     "b" => Float64::NAN,
+  #     "c" => -Float64::NAN
+  #   }
   it_parses %(a = "hello"), {"a" => "hello"}
   it_parses "a = 1979-05-27T07:32:00Z", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
-  it_parses "a = 1979-05-27T00:32:00-07:00", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
+  it_parses "a = 1979-05-27T00:32:00+07:00", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
+  it_parses "a = 1979-05-27T00:32:00.999999+07:00",
+    {"a" => Time.utc(1979, 5, 27, 7, 32, 0, nanosecond: 999999)}
+  it_parses "a = 1979-05-27 07:32:00Z", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
 
+  it_parses "a = 1979-05-27T00:32:00", {"a" => Time.local(1979, 5, 27, 0, 32, 0)}
+  it_parses "a = 1979-05-27T00:32:00.999999",
+    {"a" => Time.local(1979, 5, 27, 0, 32, 0, nanosecond: 999999)}
+
+  it_parses "a = 1979-05-27", {"a" => Time.local(1979, 5, 27)}
+  it_parses "a = 00:32:00",
+    {"a" => Time.parse("00:32:00", "%H:%M:%S", Time::Location.local)}
+  it_parses "a = 00:32:00.999999",
+    {"a" => Time.parse("00:32:00.999999", "%H:%M:%S", Time::Location.local)}
+
+  it_parses %(a = [ [ 1, 2 ], ["a", "b", "c"] ]), {"a" => [[1, 2], ["a", "b", "c"]]}
+  it_parses %(string_array = [ "all", 'strings', """are the same""", '''type''' ]),
+    {"string_array" => ["all", "strings", "are the same", "type"]}
+  it_parses %(integers2 = [
+      1, 2, 3
+    ]), {"integers2" => [1, 2, 3]}
+  
+  it_parses %(integers2 = [
+    1,
+    2,
+  ]), {"integers2" => [1, 2]}
+  # TODO
+  # Not sure
+  it_parses "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]", {"a" => [0.1, 0.2, 0.5, 1, 2, 5]}
   it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
   it_parses "a = [[[[]]]]", {"a" => [[[[] of Type] of Type] of Type]}
+  it_parses %(
+    contributors = [
+      "Foo Bar <foo@example.com>",
+      { name = "Baz Qux", email = "bazqux@example.com", url = "https://example.com/bazqux" }
+    ]),
+    {
+      "contributors" => [
+        "Foo Bar <foo@example.com>",
+        {
+          "name" => "Baz Qux",
+          "email" => "bazqux@example.com",
+          "url" => "https://example.com/bazqux"
+        }
+      ]
+    }
 
+  it_parses %(site."google.com" = true), {"site" => {"google.com" => true}}
+  it_parses %(3.14159 = "pi"), {"3" => { "14159" => "pi" }}
+  
   it_parses %(
     a = [
       1, 2, 3
@@ -99,6 +175,7 @@ describe Parser do
     point = { x = 1, y = 2 }
     ),
     {"point" => {"x" => 1, "y" => 2}}
+  it_parses %(animal = { type.name = "pug" }), {"animal" => {"type" => {"name" => "pug"}}}
 
   it_parses %(
     "foo" = 1
