@@ -8,6 +8,7 @@ class TOML::Lexer
     @line_number = 1
     @column_number = 1
     @io = IO::Memory.new
+    @before_eq_symbol = true
   end
 
   def next_token
@@ -33,6 +34,9 @@ class TOML::Lexer
     when ']'
       next_char :"]"
     when '{'
+      unless @before_eq_symbol
+        @before_eq_symbol = false
+      end
       next_char :"{"
     when '}'
       next_char :"}"
@@ -41,6 +45,7 @@ class TOML::Lexer
     when ','
       next_char :","
     when '='
+      @before_eq_symbol = false
       next_char :"="
     when '0'
       consume_number leading_zero: true
@@ -53,8 +58,7 @@ class TOML::Lexer
         consume_number
       when 'a'..'z'
         consume_math_constant
-      when
-        unexpected_char
+      when unexpected_char
       end
     when '-'
       next_char
@@ -63,8 +67,7 @@ class TOML::Lexer
         consume_number negative: true
       when 'a'..'z'
         consume_math_constant negative: true
-      when
-        unexpected_char
+      when unexpected_char
       end
     when '"'
       consume_string
@@ -97,6 +100,7 @@ class TOML::Lexer
       end
       @line_number += 1
       @column_number = 0
+      @before_eq_symbol = true
     end
     @token.line_number = @line_number
     @token.column_number = @column_number
@@ -384,17 +388,25 @@ class TOML::Lexer
       end
     end
 
-    case current_char
-    when '-'
-      if count == 4 && !has_underscore && !negative
-        return consume_time num
-      else
-        unexpected_char
+    unless @before_eq_symbol
+      case current_char
+      when '-'
+        if count == 4 && !has_underscore && !negative
+          return consume_datetime num
+        else
+          unexpected_char
+        end
+      when '.'
+        return consume_float(negative, num)
+      when ':'
+        if count == 2 && !has_underscore && !negative
+          return consume_time num
+        else
+          unexpected_char
+        end
+      when 'e', 'E'
+        return consume_exponent(negative, num)
       end
-    when '.'
-      return consume_float(negative, num)
-    when 'e', 'E'
-      return consume_exponent(negative, num)
     end
 
     if leading_zero && num != 0
@@ -489,23 +501,49 @@ class TOML::Lexer
     @token.float_value = negative ? -float : float
   end
 
-  private def consume_time(year)
-    month = consume_time_component 2, "expected month digit"
-    raise "expected '-'" unless next_char == '-'
-    day = consume_time_component 2, "expected day digit"
-    raise "expected 'T'" unless next_char == 'T'
-    hour = consume_time_component 2, "expected hour digit"
+  private def consume_time(hour)
+    minute = consume_datetime_component 2, "expected minute digit"
     raise "expected ':'" unless next_char == ':'
-    minute = consume_time_component 2, "expected minute digit"
-    raise "expected ':'" unless next_char == ':'
-    second = consume_time_component 2, "expected second digit"
+    second = consume_datetime_component 2, "expected second digit"
 
     if next_char == '.'
-      microseconds = consume_time_component 6, "expected microsecond digit"
+      microseconds = consume_datetime_component 6, "expected microsecond digit"
       next_char
     else
       microseconds = 0
     end
+
+    time_local = Time.local
+    time = Time.local(time_local.year, time_local.month, time_local.day, hour.to_i32,
+      minute, second, nanosecond: microseconds * 1000)
+
+    @token.type = :TIME
+    @token.time_value = time
+  end
+
+  private def consume_datetime(year)
+    month = consume_datetime_component 2, "expected month digit"
+    raise "expected '-'" unless next_char == '-'
+    day = consume_datetime_component 2, "expected day digit"
+    case next_char
+    when 'T', ' '
+    else
+      raise "expected 'T' or ' '"
+    end
+    hour = consume_datetime_component 2, "expected hour digit"
+    raise "expected ':'" unless next_char == ':'
+    minute = consume_datetime_component 2, "expected minute digit"
+    raise "expected ':'" unless next_char == ':'
+    second = consume_datetime_component 2, "expected second digit"
+
+    if next_char == '.'
+      microseconds = consume_datetime_component 6, "expected microsecond digit"
+      next_char
+    else
+      microseconds = 0
+    end
+
+    local_time = false
 
     negative = false
     case current_char
@@ -513,32 +551,36 @@ class TOML::Lexer
       next_char
     when '+', '-'
       negative = current_char == '-'
-      hour_offset = consume_time_component 2, "expected hour offset digit"
+      hour_offset = consume_datetime_component 2, "expected hour offset digit"
       raise "expected ':'" unless next_char == ':'
-      minute_offset = consume_time_component 2, "expected minute offset digit"
+      minute_offset = consume_datetime_component 2, "expected minute offset digit"
       next_char
     else
-      unexpected_char
+      local_time = true
     end
 
-    time =
-      {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
-        Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc) # 0.23.x or lower
-      {% elsif Crystal::VERSION =~ /^0\.24\./ %}
-        Time.new(year, month, day, hour, minute, second, nanosecond: microseconds * 1000, kind: Time::Kind::Utc) # 0.24.x breaks arguments
-      {% elseif Crystal::VERSION =~ /^0\.2[5-7]\./ %}
-        Time.new(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.25.x breaks `Time::Kind`
-      {% else %}
-        Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.28 deprecated `Time.new`
-      {% end %}
-    time += (negative ? hour_offset : -hour_offset).hours if hour_offset
-    time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
+    unless local_time
+      time =
+        {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
+          Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc) # 0.23.x or lower
+        {% elsif Crystal::VERSION =~ /^0\.24\./ %}
+          Time.new(year, month, day, hour, minute, second, nanosecond: microseconds * 1000, kind: Time::Kind::Utc) # 0.24.x breaks arguments
+        {% elseif Crystal::VERSION =~ /^0\.2[5-7]\./ %}
+          Time.new(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.25.x breaks `Time::Kind`
+        {% else %}
+          Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.28 deprecated `Time.new`
+        {% end %}
+      time += (negative ? hour_offset : -hour_offset).hours if hour_offset
+      time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
+    else
+      time = Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
+    end
 
     @token.type = :TIME
     @token.time_value = time
   end
 
-  private def consume_time_component(length, error_msg)
+  private def consume_datetime_component(length, error_msg)
     value = 0
     length.times do
       value = 10 * value + (next_char.to_i? || raise(error_msg))
@@ -553,10 +595,12 @@ class TOML::Lexer
     @token.type = :KEY
     @token.string_value = string_range(start_pos)
 
-    # Process a key if it is a math constant
-    begin
-      process_math_constant(@token.string_value)
-    rescue
+    unless @before_eq_symbol
+      # Process a key if it is a math constant
+      begin
+        process_math_constant(@token.string_value)
+      rescue
+      end
     end
   end
 
