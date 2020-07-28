@@ -48,10 +48,24 @@ class TOML::Lexer
       consume_number
     when '+'
       next_char
-      consume_number
+      case current_char
+      when '0'..'9'
+        consume_number
+      when 'a'..'z'
+        consume_math_constant
+      when
+        unexpected_char
+      end
     when '-'
       next_char
-      consume_number negative: true
+      case current_char
+      when '0'..'9'
+        consume_number negative: true
+      when 'a'..'z'
+        consume_math_constant negative: true
+      when
+        unexpected_char
+      end
     when '"'
       consume_string
     when '\''
@@ -312,6 +326,39 @@ class TOML::Lexer
     end
   end
 
+  private def consume_math_constant(negative = false)
+    @io.clear
+
+    while true
+      case current_char
+      when 'a'..'z'
+        @io << current_char
+        next_char
+      else
+        break
+      end
+    end
+
+    process_math_constant(@io.to_s)
+
+    if negative
+      @token.float_value = -@token.float_value
+    end
+  end
+
+  private def process_math_constant(string)
+    case string
+    when "inf"
+      @token.type = :FLOAT
+      @token.float_value = Float64::INFINITY
+    when "nan"
+      @token.type = :FLOAT
+      @token.float_value = Float64::NAN
+    else
+      raise "unexpected math constant #{token}"
+    end
+  end
+
   private def consume_number(negative = false, leading_zero = false)
     num = 0_i64
     num += current_char.to_i
@@ -505,6 +552,12 @@ class TOML::Lexer
     end
     @token.type = :KEY
     @token.string_value = string_range(start_pos)
+
+    # Process a key if it is a math constant
+    begin
+      process_math_constant(@token.string_value)
+    rescue
+    end
   end
 
   private def key_part?(char)
