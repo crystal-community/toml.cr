@@ -522,13 +522,24 @@ class TOML::Lexer
   end
 
   private def consume_datetime(year)
+    t_delimiter_with_space = false
+
     month = consume_datetime_component 2, "expected month digit"
     raise "expected '-'" unless next_char == '-'
     day = consume_datetime_component 2, "expected day digit"
     case next_char
-    when 'T', ' '
+    when 'T'
+    when ' '
+      t_delimiter_with_space = true
     else
-      raise "expected 'T' or ' '"
+      @token.type = :TIME
+      @token.time_value = Time.local(year.to_i32, month, day)
+      return
+    end
+    if t_delimiter_with_space && !peek_next_char.to_i?
+      @token.type = :TIME
+      @token.time_value = Time.local(year.to_i32, month, day)
+      return
     end
     hour = consume_datetime_component 2, "expected hour digit"
     raise "expected ':'" unless next_char == ':'
@@ -625,9 +636,18 @@ class TOML::Lexer
     @reader.current_char
   end
 
+  private def peek_next_char
+    @reader.peek_next_char
+  end
+
   private def next_char
     @column_number += 1
     @reader.next_char
+  end
+
+  private def prev_char
+    @column_number -= 1
+    @reader.previous
   end
 
   private def next_char(token_type)

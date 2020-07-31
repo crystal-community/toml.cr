@@ -104,6 +104,8 @@ describe Parser do
 
   it_parses "a = 1979-05-27", {"a" => Time.local(1979, 5, 27)}
 
+  it_parses "a = 1979-05-27  # comment", {"a" => Time.local(1979, 5, 27)}
+
   it_parses "a = 00:32:00",
     {"a" => Time.local(time_local.year, time_local.month, time_local.day, 0, 32, 0)}
 
@@ -128,26 +130,8 @@ describe Parser do
     1,
     2,
   ]), {"integers2" => [1, 2]}
-  # TODO
-  # Not sure
-  it_parses "numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]", {"a" => [0.1, 0.2, 0.5, 1, 2, 5]}
   it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
   it_parses "a = [[[[]]]]", {"a" => [[[[] of Type] of Type] of Type]}
-  it_parses %(
-    contributors = [
-      "Foo Bar <foo@example.com>",
-      { name = "Baz Qux", email = "bazqux@example.com", url = "https://example.com/bazqux" }
-    ]),
-    {
-      "contributors" => [
-        "Foo Bar <foo@example.com>",
-        {
-          "name"  => "Baz Qux",
-          "email" => "bazqux@example.com",
-          "url"   => "https://example.com/bazqux",
-        },
-      ],
-    }
 
   it_parses %(site."google.com" = true), {"site" => {"google.com" => true}}
   it_parses %(3.14159 = "pi"), {"3" => {"14159" => "pi"}}
