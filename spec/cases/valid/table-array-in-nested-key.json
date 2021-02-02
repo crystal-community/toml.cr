@@ -1,0 +1,12 @@
+{
+  "hardware_types": {
+    "amd": {
+      "name": { "type": "string", "value": "amd" },
+      "components": [
+        {
+          "name": { "type": "string", "value": "margin1" }
+        }
+      ]
+    }
+  }
+}

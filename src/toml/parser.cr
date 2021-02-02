@@ -149,6 +149,12 @@ class TOML::Parser
 
             table = last
           end
+        when Hash
+          if has_more_names
+            table = existing_value
+          else
+            raise "expected #{@names.join '.'} to be an Array, not #{existing_value}"
+          end
         else
           raise "expected #{@names.join '.'} to be an Array, not #{existing_value}"
         end
