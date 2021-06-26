@@ -4,7 +4,7 @@ private def it_parses(string, expected, file = __FILE__, line = __LINE__)
   it "parses #{string}", file, line do
     parser = Parser.new string
     actual = parser.parse
-    actual.should eq(expected), file, line
+    actual.should eq(expected), file: file, line: line
   end
 end
 
