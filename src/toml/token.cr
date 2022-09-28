@@ -18,9 +18,9 @@ class TOML::Token
     @string_value = ""
     @int_value = 0_i64
     @float_value = 0.0
-    @time_value = 
+    @time_value =
       {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-7])\./ %}
-        Time.new(1,1,1)
+        Time.new(1, 1, 1)
       {% else %}
         Time.local # 2.8 deprecated `Time.new`
       {% end %}

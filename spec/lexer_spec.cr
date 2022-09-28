@@ -1,8 +1,14 @@
 require "./spec_helper"
 
+class TOML::Lexer
+  def before_eq_symbol=(@before_eq_symbol : Bool)
+  end
+end
+
 private def it_lexes(string, expected_type, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
+    lexer.before_eq_symbol = false
     token = lexer.next_token
     token.type.should eq(expected_type)
   end
@@ -29,6 +35,7 @@ end
 private def it_lexes_float(string, value, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
+    lexer.before_eq_symbol = false
     token = lexer.next_token
     token.type.should eq(:FLOAT)
     token.float_value.should eq(value)
@@ -47,6 +54,7 @@ end
 private def it_lexes_time(string, value, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
+    lexer.before_eq_symbol = false
     token = lexer.next_token
     token.type.should eq(:TIME)
     token.time_value.should eq(value)
@@ -57,6 +65,7 @@ private def it_raises(string, file = __FILE__, line = __LINE__)
   it "raises on lex #{string.inspect}", file, line do
     expect_raises ParseException do
       lexer = Lexer.new(string)
+      lexer.before_eq_symbol = false
       while lexer.next_token.type != :EOF
         # Nothing
       end
@@ -94,6 +103,9 @@ describe Lexer do
   it_lexes_int "9223372036854775807", 9223372036854775807
   it_lexes_int "-9223372036854775807", -9223372036854775807
 
+  # it_lexes_float "nan", Float64::NAN # Float64::NAN cannot be compared
+  it_lexes "nan", :FLOAT
+  it_lexes_float "inf", Float64::INFINITY
   it_lexes_float "12.34", 12.34
   it_lexes_float "0.123", 0.123
   it_lexes_float "1234.567", 1234.567
@@ -142,9 +154,9 @@ describe Lexer do
   it_lexes_time "1979-05-27T07:32:00+07:30", Time.utc(1979, 5, 27, 0, 2, 0)
   it_lexes_time "1979-05-27T07:32:00.999999-07:00",
     {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
-       Time.utc(1979, 5, 27, 14, 32, 0, 999)
+      Time.utc(1979, 5, 27, 14, 32, 0, 999)
     {% else %}
-       Time.utc(1979, 5, 27, 14, 32, 0, nanosecond: 999999000)
+      Time.utc(1979, 5, 27, 14, 32, 0, nanosecond: 999999000)
     {% end %}
 
   it "lexes multinline basic string" do

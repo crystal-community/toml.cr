@@ -20,8 +20,16 @@ class TOML::Parser
         break
       when :NEWLINE
         next_token
-      when :KEY, :STRING
+      when :KEY, :INT, :STRING
         parse_key_value(table)
+        case token.type
+        when :NEWLINE
+          next_token
+        when :EOF
+          # Nothing
+        else
+          unexpected_token
+        end
       when :"["
         table = parse_table_header(root_table)
       else
@@ -32,23 +40,42 @@ class TOML::Parser
     root_table
   end
 
-  private def parse_key_value(table)
-    parse_key_value_after_key(table)
+  private def parse_key_value(root_table)
+    table, key = parse_key(root_table) do |table, name, has_more_names|
+      existing_value = table[name]?
+      if existing_value
+        case existing_value
+        when Hash
+          if !has_more_names && existing_value.empty?
+            raise "table #{@names.join '.'} already defined"
+          end
 
-    case token.type
-    when :NEWLINE
-      next_token
-    when :EOF
-      # Nothing
-    else
-      unexpected_token
+          table = existing_value
+        when Array
+          unless has_more_names
+            raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
+          end
+
+          if last_element = existing_value.last?
+            if last_element.is_a?(Hash)
+              table = last_element
+            else
+              raise "expected #{@names.join '.'} to be a Table of Array, not #{existing_value}"
+            end
+          else
+            table = Table.new
+            existing_value << table
+          end
+        else
+          raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
+        end
+      else
+        table = table[name] = Table.new
+      end
+
+      table
     end
-  end
 
-  private def parse_key_value_after_key(table)
-    key = token.string_value
-
-    next_token
     check :"="
     next_token
 
@@ -57,6 +84,45 @@ class TOML::Parser
     end
 
     table[key] = parse_value
+  end
+
+  private def parse_key(table, double_ending = false)
+    @names.clear
+
+    while true
+      case token.type
+      when :KEY, :STRING, :INT
+        if token.type == :INT
+          name = token.int_value.to_s
+        else
+          name = token.string_value
+        end
+        @names << name
+        next_token
+
+        has_more_names = token.type == :"."
+
+        unless has_more_names
+          return {table, name}
+        end
+
+        table = yield table, name, has_more_names
+
+        case token.type
+        when :"."
+          next_token
+          unexpected_token if token.type == :"."
+        end
+      else
+        unexpected_token
+      end
+    end
+
+    unexpected_token
+  end
+
+  private def parse_key_value_after_key(table)
+    parse_key_value(table)
   end
 
   private def parse_value
@@ -176,8 +242,12 @@ class TOML::Parser
 
     while true
       case token.type
-      when :KEY, :STRING
-        name = token.string_value
+      when :KEY, :STRING, :INT
+        if token.type == :INT
+          name = token.int_value.to_s
+        else
+          name = token.string_value
+        end
         @names << name
         next_token
 
@@ -262,7 +332,7 @@ class TOML::Parser
     table = Table.new
     while true
       case token.type
-      when :KEY
+      when :KEY, :STRING, :INT
         parse_key_value_after_key(table)
 
         if token.type == :","
