@@ -41,7 +41,7 @@ private def compare(toml_hash : Hash, json_hash : Hash)
 
   toml_hash.each do |key, toml_value|
     json_value = json_hash[key]
-    compare toml_value, json_value
+    compare toml_value.raw, json_value
   end
 end
 
@@ -61,13 +61,13 @@ private def compare(toml_array : Array, json_array : Array)
   end
 
   toml_array.zip(json_array) do |toml_value, json_value|
-    compare toml_value, json_value
+    compare toml_value.raw, json_value
   end
 end
 
 private def compare(toml_value : Array, json_hash : Hash)
   json_hash["type"].should eq("array")
-  json_value = json_hash["value"].as(Array)
+  json_value = json_hash["value"].as_a
   compare toml_value, json_value
 end
 

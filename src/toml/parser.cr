@@ -46,38 +46,7 @@ class TOML::Parser
 
   private def parse_key_value(root_table)
     table, key = parse_key(root_table) do |table, name, has_more_names|
-      existing_value = table[name]?
-      if existing_value
-        case existing_value
-        when Hash
-          if !has_more_names && existing_value.empty?
-            raise "table #{@names.join '.'} already defined"
-          end
-
-          table = existing_value
-        when Array
-          unless has_more_names
-            raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-          end
-
-          if last_element = existing_value.last?
-            if last_element.is_a?(Hash)
-              table = last_element
-            else
-              raise "expected #{@names.join '.'} to be a Table of Array, not #{existing_value}"
-            end
-          else
-            table = Table.new
-            existing_value << table
-          end
-        else
-          raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-        end
-      else
-        table = table[name] = Table.new
-      end
-
-      table
+      handle_table table, name, has_more_names
     end
 
     check :"="
@@ -129,32 +98,71 @@ class TOML::Parser
     parse_key_value(table)
   end
 
-  private def parse_value
-    case token.type
-    when :KEY
-      case token.string_value
-      when "true"
-        true.tap { next_token }
-      when "false"
-        false.tap { next_token }
+  private def parse_value : Any
+    value = case token.type
+            when :KEY
+              case token.string_value
+              when "true"
+                true.tap { next_token }
+              when "false"
+                false.tap { next_token }
+              else
+                unexpected_token
+              end
+            when :INT
+              token.int_value.tap { next_token }
+            when :FLOAT
+              token.float_value.tap { next_token }
+            when :STRING
+              token.string_value.tap { next_token }
+            when :TIME
+              token.time_value.tap { next_token }
+            when :"["
+              parse_array
+            when :"{"
+              parse_inline_table
+            else
+              unexpected_token
+            end
+    Any.new value
+  end
+
+  private def handle_table(table, name, has_more_names) : Table
+    if existing_value = table[name]?
+      raw = existing_value.raw
+      case raw
+      when Hash
+        if !has_more_names && raw.empty?
+          raise "table #{@names.join '.'} already defined"
+        end
+
+        table = raw
+      when Array
+        unless has_more_names
+          raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
+        end
+
+        if last_element = raw.last?
+          le_raw = last_element.raw
+          if le_raw.is_a?(Hash)
+            table = le_raw
+          else
+            raise "expected #{@names.join '.'} to be a Table of Array, not #{existing_value}"
+          end
+        else
+          table = Table.new
+          raw << Any.new(table)
+        end
       else
-        unexpected_token
+        raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
       end
-    when :INT
-      token.int_value.tap { next_token }
-    when :FLOAT
-      token.float_value.tap { next_token }
-    when :STRING
-      token.string_value.tap { next_token }
-    when :TIME
-      token.time_value.tap { next_token }
-    when :"["
-      parse_array
-    when :"{"
-      parse_inline_table
     else
-      unexpected_token
+      new_table = Table.new
+      table[name] = Any.new new_table
+      table = new_table
     end
+
+    table
   end
 
   private def parse_table_header(root_table)
@@ -166,53 +174,22 @@ class TOML::Parser
     end
 
     parse_header(root_table) do |table, name, has_more_names|
-      existing_value = table[name]?
-      if existing_value
-        case existing_value
-        when Hash
-          if !has_more_names && existing_value.empty?
-            raise "table #{@names.join '.'} already defined"
-          end
-
-          table = existing_value
-        when Array
-          unless has_more_names
-            raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-          end
-
-          if last_element = existing_value.last?
-            if last_element.is_a?(Hash)
-              table = last_element
-            else
-              raise "expected #{@names.join '.'} to be a Table of Array, not #{existing_value}"
-            end
-          else
-            table = Table.new
-            existing_value << table
-          end
-        else
-          raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-        end
-      else
-        table = table[name] = Table.new
-      end
-
-      table
+      handle_table(table, name, has_more_names)
     end
   end
 
   private def parse_array_table_header(root_table)
     parse_header(root_table, double_ending: true) do |table, name, has_more_names|
-      existing_value = table[name]?
-      if existing_value
-        case existing_value
+      if existing_value = table[name]?
+        raw = existing_value.raw
+        case raw
         when Array
-          array = existing_value
+          array = raw
           if array.empty? || !has_more_names
             table = Table.new
-            array << table
+            array << Any.new(table)
           else
-            last = array.last
+            last = array.last.raw
             unless last.is_a?(Table)
               raise "expected #{@names.join '.'} to be an Array of Table, not #{existing_value}"
             end
@@ -221,7 +198,7 @@ class TOML::Parser
           end
         when Hash
           if has_more_names
-            table = existing_value
+            table = raw
           else
             raise "expected #{@names.join '.'} to be an Array, not #{existing_value}"
           end
@@ -230,11 +207,14 @@ class TOML::Parser
         end
       else
         if has_more_names
-          table = table[name] = Table.new
+          new_table = Table.new
+          table[name] = Any.new new_table
+          table = new_table
         else
-          array = table[name] = [] of Type
+          array = [] of Any
+          table[name] = Any.new array
           table = Table.new
-          array << table
+          array << Any.new table
         end
       end
       table
@@ -289,8 +269,8 @@ class TOML::Parser
   private def parse_array
     next_token
 
-    ary = [] of Type
-    previous_value = nil
+    ary = [] of Any
+    previous_value : Any::Type? = nil
 
     while true
       case token.type
@@ -304,11 +284,11 @@ class TOML::Parser
         new_value = parse_value
         ary << new_value
 
-        if previous_value && previous_value.class != new_value.class
+        if previous_value && previous_value.class != new_value.raw.class
           raise "cannot mix types in array"
         end
 
-        previous_value = new_value
+        previous_value = new_value.raw
 
         case token.type
         when :NEWLINE

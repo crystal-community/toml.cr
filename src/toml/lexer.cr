@@ -65,8 +65,7 @@ class TOML::Lexer
       when unexpected_char
       end
     when '-'
-      next_char
-      case current_char
+      case next_char
       when '0'..'9'
         consume_number negative: true
       when 'a'..'z'
