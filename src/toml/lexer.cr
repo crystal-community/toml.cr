@@ -1,17 +1,21 @@
 # :nodoc:
 class TOML::Lexer
   getter token
+  @peeked : Char? = nil
 
-  def initialize(string)
-    @reader = Char::Reader.new(string)
+  def self.new(string : String)
+    new(IO::Memory.new(string))
+  end
+
+  def initialize(@input : IO)
+    @current_char = @input.read_char || '\0'
     @token = Token.new
     @line_number = 1
     @column_number = 1
-    @io = IO::Memory.new
     @before_eq_symbol = true
   end
 
-  def next_token
+  def next_token : Token
     skip_whitespace
     skip_comment
 
@@ -74,7 +78,7 @@ class TOML::Lexer
     when '\''
       consume_literal_string
     else
-      if key_part?(current_char)
+      if key_part? current_char
         consume_key
       else
         unexpected_char
@@ -123,89 +127,84 @@ class TOML::Lexer
   end
 
   private def consume_basic_string
-    @io.clear
-
-    while true
-      case current_char
-      when '"'
-        next_char
-        break
-      when '\\'
-        next_char
-        consume_escape
-      when '\0'
-        raise "unterminated string literal"
-      when '\n'
-        raise "newline is not allowed in basic string"
-      else
-        @io << current_char
-        next_char
+    @token.string_value = String.build do |io|
+      while true
+        case current_char
+        when '"'
+          next_char
+          break
+        when '\\'
+          next_char
+          consume_escape(io)
+        when '\0'
+          raise "unterminated string literal"
+        when '\n'
+          raise "newline is not allowed in basic string"
+        else
+          io << current_char
+          next_char
+        end
       end
     end
-
-    @token.string_value = @io.to_s
   end
 
   private def consume_multine_basic_string
-    @io.clear
-
     if next_char == '\n'
       newline
       next_char
     end
 
-    while true
-      case current_char
-      when '"'
-        if next_char == '"'
+    @token.string_value = String.build do |io|
+      loop do
+        case current_char
+        when '"'
           if next_char == '"'
-            next_char
-            break
-          else
-            @io << %("")
-          end
-        else
-          @io << '"'
-        end
-        next_char
-      when '\\'
-        if next_char == '\n'
-          newline
-          next_char
-          while true
-            case current_char
-            when ' ', '\t'
+            if next_char == '"'
               next_char
-            when '\n'
-              newline
-              next_char
-            else
               break
+            else
+              io << %("")
             end
+          else
+            io << '"'
           end
+          next_char
+        when '\\'
+          if next_char == '\n'
+            newline
+            next_char
+            while true
+              case current_char
+              when ' ', '\t'
+                next_char
+              when '\n'
+                newline
+                next_char
+              else
+                break
+              end
+            end
+          else
+            consume_escape(io)
+          end
+        when '\n'
+          newline
+          io << '\n'
+          next_char
+        when '\0'
+          raise "unterminated string literal"
         else
-          consume_escape
+          io << current_char
+          next_char
         end
-      when '\n'
-        newline
-        @io << '\n'
-        next_char
-      when '\0'
-        raise "unterminated string literal"
-      else
-        @io << current_char
-        next_char
       end
     end
-
-    @token.string_value = @io.to_s
   end
 
   private def consume_literal_string
     @token.type = :STRING
 
     next_char
-    start_pos = current_pos
 
     if current_char == '\''
       if next_char == '\''
@@ -215,79 +214,80 @@ class TOML::Lexer
         @token.string_value = ""
         return
       end
+    else
+      consume_basic_literal_string
     end
-
-    consume_basic_literal_string(start_pos)
   end
 
-  private def consume_basic_literal_string(start_pos)
-    while true
-      case current_char
-      when '\''
-        @token.string_value = string_range(start_pos)
-        next_char
-        return
-      when '\0'
-        raise "unterminated string literal"
-      else
-        next_char
+  private def consume_basic_literal_string
+    string = String.build do |io|
+      io << current_char
+      loop do
+        case next_char
+        when '\''
+          next_char
+          break
+        when '\0'
+          raise "unterminated string literal"
+        else
+          io << current_char
+        end
       end
     end
+    @token.string_value = string
   end
 
   private def consume_multine_literal_string
-    @io.clear
-
     if next_char == '\n'
       newline
       next_char
     end
 
-    while true
-      case current_char
-      when '\''
-        if next_char == '\''
+    @token.string_value = String.build do |io|
+      loop do
+        case current_char
+        when '\''
           if next_char == '\''
-            next_char
-            break
+            if next_char == '\''
+              next_char
+              break
+            else
+              io << %('')
+            end
           else
-            @io << %('')
+            io << '\''
+            io << current_char
           end
+        when '\n'
+          newline
+          io << '\n'
+        when '\0'
+          raise "unterminated string literal"
         else
-          @io << '\''
-          @io << current_char
+          io << current_char
         end
-      when '\n'
-        newline
-        @io << '\n'
-      when '\0'
-        raise "unterminated string literal"
-      else
-        @io << current_char
+        next_char
       end
-      next_char
     end
-
-    @token.string_value = @io.to_s
   end
 
-  private def consume_escape
+  private def consume_escape(io)
     case current_char
     when 'b'
-      @io << '\b'
+      io << '\b'
     when 't'
-      @io << '\t'
+      io << '\t'
     when 'n'
-      @io << '\n'
+      io << '\n'
     when 'f'
-      @io << '\f'
+      io << '\f'
     when 'r'
-      @io << '\r'
+      io << '\r'
     when 'u'
-      @io << consume_unicode_scalar
+      io << consume_unicode_scalar
       return
     when '\\', '\'', '"'
-      @io << current_char
+      io << current_char
     else
       raise "unknown escape: \\#{current_char}"
     end
@@ -331,19 +331,18 @@ class TOML::Lexer
   end
 
   private def consume_math_constant(negative = false)
-    @io.clear
-
-    while true
-      case current_char
-      when 'a'..'z'
-        @io << current_char
-        next_char
-      else
-        break
+    string = String.build do |io|
+      while true
+        case current_char
+        when 'a'..'z'
+          io << current_char
+          next_char
+        else
+          break
+        end
       end
     end
-
-    process_math_constant(@io.to_s)
+    process_math_constant(string)
 
     if negative
       @token.float_value = -@token.float_value
@@ -590,12 +589,14 @@ class TOML::Lexer
     value
   end
 
-  private def consume_key(start_pos = current_pos)
-    while key_part?(current_char)
-      next_char
+  private def consume_key
+    @token.string_value = String.build do |io|
+      io << current_char
+      while key_part? next_char
+        io << current_char
+      end
     end
     @token.type = :KEY
-    @token.string_value = string_range(start_pos)
 
     unless @before_eq_symbol
       # Process a key if it is a math constant
@@ -615,39 +616,30 @@ class TOML::Lexer
     end
   end
 
-  private def string_range(start_pos)
-    string_range(start_pos, current_pos)
-  end
-
-  private def string_range(start_pos, end_pos)
-    @reader.string.byte_slice(start_pos, end_pos - start_pos)
-  end
-
   private def current_char
-    @reader.current_char
+    @current_char
   end
 
-  private def peek_next_char
-    @reader.peek_next_char
+  private def peek_next_char : Char
+    if peeked = @peeked
+      return peeked
+    end
+    @peeked = @input.read_char || '\0'
   end
 
-  private def next_char
+  private def next_char : Char
     @column_number += 1
-    @reader.next_char
-  end
-
-  private def prev_char
-    @column_number -= 1
-    @reader.previous
+    if peeked = @peeked
+      @peeked = nil
+      return peeked
+    end
+    c = @current_char = @input.read_char || '\0'
+    c
   end
 
   private def next_char(token_type)
     @token.type = token_type
     next_char
-  end
-
-  private def current_pos
-    @reader.pos
   end
 
   private def newline

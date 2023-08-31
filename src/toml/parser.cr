@@ -1,20 +1,24 @@
 # :nodoc:
 class TOML::Parser
-  def self.parse(string)
-    new(string).parse
+  def self.parse(input) : Table
+    new(input).parse
   end
 
-  def initialize(string)
-    @lexer = Lexer.new(string)
+  def self.new(string : String)
+    new(IO::Memory.new(string))
+  end
+
+  def initialize(io : IO)
+    @lexer = Lexer.new(io)
     @names = [] of String
     next_token
   end
 
-  def parse
+  def parse : Table
     root_table = Table.new
     table = root_table
 
-    while true
+    loop do
       case token.type
       when :EOF
         break

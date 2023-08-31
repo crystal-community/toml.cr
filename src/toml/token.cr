@@ -2,14 +2,14 @@
 class TOML::Token
   @time_value : Time
 
-  property :type
+  property type
 
-  property :string_value
-  property :int_value
-  property :float_value
-  property :time_value
-  property :line_number
-  property :column_number
+  property string_value
+  property int_value
+  property float_value
+  property time_value
+  property line_number
+  property column_number
 
   def initialize
     @type = :EOF
