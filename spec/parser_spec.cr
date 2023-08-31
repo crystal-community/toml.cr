@@ -31,7 +31,7 @@ end
 time_local = Time.local
 
 describe Parser do
-  it_parses "", {} of String => Type
+  it_parses "", {} of String => Any
   it_parses "a = true", {"a" => true}
   it_parses "a = false", {"a" => false}
   it_parses "bare_key = false", {"bare_key" => false}
@@ -131,7 +131,7 @@ describe Parser do
     2,
   ]), {"integers2" => [1, 2]}
   it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
-  it_parses "a = [[[[]]]]", {"a" => [[[[] of Type] of Type] of Type]}
+  it_parses "a = [[[[]]]]", {"a" => Any.new([Any.new([Any.new([Any.new([] of Any)])])])}
 
   it_parses %(site."google.com" = true), {"site" => {"google.com" => true}}
   it_parses %(3.14159 = "pi"), {"3" => {"14159" => "pi"}}
@@ -164,7 +164,7 @@ describe Parser do
     [table2]
     two = 2
     ),
-    {"table1" => {"one" => 1}, "table2" => {"two" => 2}}
+    {"table1" => Any.new({"one" => Any.new(1)}), "table2" => Any.new({"two" => Any.new(2)})}
 
   it_parses %(
       [dog."tater.man"]
