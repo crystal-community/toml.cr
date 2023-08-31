@@ -152,12 +152,7 @@ describe Lexer do
   it_lexes_time "1979-05-27T07:32:00Z", Time.utc(1979, 5, 27, 7, 32, 0)
   it_lexes_time "1979-05-27T07:32:00-07:30", Time.utc(1979, 5, 27, 15, 2, 0)
   it_lexes_time "1979-05-27T07:32:00+07:30", Time.utc(1979, 5, 27, 0, 2, 0)
-  it_lexes_time "1979-05-27T07:32:00.999999-07:00",
-    {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
-      Time.utc(1979, 5, 27, 14, 32, 0, 999)
-    {% else %}
-      Time.utc(1979, 5, 27, 14, 32, 0, nanosecond: 999999000)
-    {% end %}
+  it_lexes_time "1979-05-27T07:32:00.999999-07:00", Time.utc(1979, 5, 27, 14, 32, 0, nanosecond: 999999000)
 
   it "lexes multinline basic string" do
     lexer = Lexer.new(%("""hello"""))

@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/crystal-community/toml.cr.png)](https://travis-ci.org/crystal-community/toml.cr)
 
-A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.4.0 version of TOML.
+A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.5.0 version of TOML.
 
 ## Installation
 

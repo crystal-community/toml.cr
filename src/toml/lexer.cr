@@ -571,16 +571,7 @@ class TOML::Lexer
     end
 
     unless local_time
-      time =
-        {% if Crystal::VERSION =~ /^0\.(\d|1\d|2[0-3])\./ %}
-          Time.new(year, month, day, hour, minute, second, microseconds / 1000, kind: Time::Kind::Utc) # 0.23.x or lower
-        {% elsif Crystal::VERSION =~ /^0\.24\./ %}
-          Time.new(year, month, day, hour, minute, second, nanosecond: microseconds * 1000, kind: Time::Kind::Utc) # 0.24.x breaks arguments
-        {% elseif Crystal::VERSION =~ /^0\.2[5-7]\./ %}
-          Time.new(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.25.x breaks `Time::Kind`
-        {% else %}
-          Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000, location: Time::Location::UTC) # 0.28 deprecated `Time.new`
-        {% end %}
+      time = Time.utc(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
       time += (negative ? hour_offset : -hour_offset).hours if hour_offset
       time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
     else
