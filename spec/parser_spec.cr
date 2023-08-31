@@ -16,7 +16,7 @@ private def it_parses_and_eq(string_a, string_b, file = __FILE__, line = __LINE_
     parser_b = Parser.new string_b
     result_b = parser_b.parse
 
-    result_a.should eq(result_b), file, line
+    result_a.should eq(result_b), file: file, line: line
   end
 end
 

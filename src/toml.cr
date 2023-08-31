@@ -7,8 +7,13 @@ module TOML
   alias Table = Hash(String, Type)
 
   # Parses a string.
-  def self.parse(string) : TOML::Table
-    Parser.parse(string)
+  def self.parse(input : String) : TOML::Table
+    Parser.parse(IO::Memory.new(input))
+  end
+
+  # Parses from an `IO`
+  def self.parse(io : IO) : TOML::Table
+    Parser.parse(io)
   end
 
   # Parses a file.
