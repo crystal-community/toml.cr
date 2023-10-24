@@ -56,7 +56,9 @@ class TOML::Parser
       raise "duplicated key: '#{key}'"
     end
 
-    table[key] = parse_value
+    value = parse_value
+    value.is_static_array = value.raw.is_a?(Array)
+    table[key] = value
   end
 
   private def parse_key(table, double_ending = false)
@@ -169,11 +171,14 @@ class TOML::Parser
     next_token
 
     if token.type == :"["
+      # Array of Tables
       next_token
       return parse_array_table_header(root_table)
     end
 
+    # Table
     parse_header(root_table) do |table, name, has_more_names|
+      raise "Cannot append to static array array" if root_table[name]? && root_table[name].is_static_array?
       handle_table(table, name, has_more_names)
     end
   end
@@ -181,6 +186,7 @@ class TOML::Parser
   private def parse_array_table_header(root_table)
     parse_header(root_table, double_ending: true) do |table, name, has_more_names|
       if existing_value = table[name]?
+        raise "Cannot append to static array" if existing_value.is_static_array?
         raw = existing_value.raw
         case raw
         when Array
