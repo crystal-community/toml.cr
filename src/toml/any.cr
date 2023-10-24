@@ -27,6 +27,11 @@ struct TOML::Any
   # Returns the raw underlying value.
   getter raw : Type
 
+  # Is the type a static array?
+  #
+  # These types cannot be modified
+  protected property? is_static_array = false
+
   # Creates a `TOML::Any` that wraps the given value.
   def initialize(@raw : Type)
   end
