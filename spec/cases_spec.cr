@@ -76,7 +76,7 @@ private def compare(toml_value, json_value)
 end
 
 describe TOML do
-  files = Dir["#{__DIR__}/cases/valid/*.toml"]
+  files = Dir["#{__DIR__}/cases/valid/**/*.toml"]
   files.each do |file|
     it "parses valid case '#{file}'" do
       toml = TOML.parse_file(file)
@@ -86,7 +86,7 @@ describe TOML do
     end
   end
 
-  files = Dir["#{__DIR__}/cases/invalid/*.toml"]
+  files = Dir["#{__DIR__}/cases/invalid/**/*.toml"]
   files.each do |file|
     it "raises on invalid case '#{file}'" do
       expect_raises ParseException do
