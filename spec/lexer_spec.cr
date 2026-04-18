@@ -154,7 +154,7 @@ describe Lexer do
   it_lexes_time "1979-05-27T07:32:00+07:30", Time.utc(1979, 5, 27, 0, 2, 0)
   it_lexes_time "1979-05-27T07:32:00.999999-07:00", Time.utc(1979, 5, 27, 14, 32, 0, nanosecond: 999999000)
 
-  it "lexes multinline basic string" do
+  it "lexes multiline basic string" do
     lexer = Lexer.new(%("""hello"""))
 
     token = lexer.next_token
@@ -164,7 +164,7 @@ describe Lexer do
     lexer.next_token.type.should eq(:EOF)
   end
 
-  it "lexes multinline basic string (2)" do
+  it "lexes multiline basic string (2)" do
     lexer = Lexer.new(%("""hello\\\n"""))
 
     token = lexer.next_token
