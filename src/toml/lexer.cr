@@ -115,7 +115,7 @@ class TOML::Lexer
 
     if next_char == '"'
       if next_char == '"'
-        consume_multine_basic_string
+        consume_multiline_basic_string
       else
         @token.string_value = ""
       end
@@ -147,7 +147,7 @@ class TOML::Lexer
     end
   end
 
-  private def consume_multine_basic_string
+  private def consume_multiline_basic_string
     if next_char == '\n'
       newline
       next_char
@@ -207,7 +207,7 @@ class TOML::Lexer
 
     if current_char == '\''
       if next_char == '\''
-        consume_multine_literal_string
+        consume_multiline_literal_string
         return
       else
         @token.string_value = ""
@@ -236,7 +236,7 @@ class TOML::Lexer
     @token.string_value = string
   end
 
-  private def consume_multine_literal_string
+  private def consume_multiline_literal_string
     if next_char == '\n'
       newline
       next_char
