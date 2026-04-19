@@ -64,7 +64,7 @@ class TOML::Parser
   private def parse_key(table, double_ending = false)
     @names.clear
 
-    while true
+    loop do
       case token.type
       when :KEY, :STRING, :INT
         if token.type == :INT
@@ -230,7 +230,7 @@ class TOML::Parser
   private def parse_header(table, double_ending = false)
     @names.clear
 
-    while true
+    loop do
       case token.type
       when :KEY, :STRING, :INT
         if token.type == :INT
@@ -278,7 +278,7 @@ class TOML::Parser
     ary = [] of Any
     previous_value : Any::Type? = nil
 
-    while true
+    loop do
       case token.type
       when :NEWLINE
         next_token
@@ -320,7 +320,7 @@ class TOML::Parser
     next_token
 
     table = Table.new
-    while true
+    loop do
       case token.type
       when :KEY, :STRING, :INT
         parse_key_value_after_key(table)
