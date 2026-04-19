@@ -90,7 +90,7 @@ class TOML::Lexer
   private def consume_newline
     @line_number += 1
     @column_number = 0
-    while true
+    loop do
       case next_char
       when '\r'
         unless next_char == '\n'
@@ -127,7 +127,7 @@ class TOML::Lexer
 
   private def consume_basic_string
     @token.string_value = String.build do |io|
-      while true
+      loop do
         case current_char
         when '"'
           next_char
@@ -172,7 +172,7 @@ class TOML::Lexer
           if next_char == '\n'
             newline
             next_char
-            while true
+            loop do
               case current_char
               when ' ', '\t'
                 next_char
@@ -320,7 +320,7 @@ class TOML::Lexer
 
   private def skip_comment
     if current_char == '#'
-      while true
+      loop do
         case next_char
         when '\0', '\n'
           break
@@ -331,7 +331,7 @@ class TOML::Lexer
 
   private def consume_math_constant(negative = false)
     string = String.build do |io|
-      while true
+      loop do
         case current_char
         when 'a'..'z'
           io << current_char
@@ -368,7 +368,7 @@ class TOML::Lexer
     last_is_underscore = false
     has_underscore = false
 
-    while true
+    loop do
       case next_char
       when '0'..'9'
         num = num * 10 + current_char.to_i
@@ -421,7 +421,7 @@ class TOML::Lexer
     divisor = 1_u64
     last_is_underscore = false
     next_char
-    while true
+    loop do
       case current_char
       when '0'..'9'
         integer *= 10
@@ -470,7 +470,7 @@ class TOML::Lexer
     end
 
     if '0' <= current_char <= '9'
-      while true
+      loop do
         case current_char
         when '0'..'9'
           exponent *= 10
