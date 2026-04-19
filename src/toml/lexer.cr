@@ -568,12 +568,12 @@ class TOML::Lexer
       local_time = true
     end
 
-    unless local_time
+    if local_time
+      time = Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
+    else
       time = Time.utc(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
       time += (negative ? hour_offset : -hour_offset).hours if hour_offset
       time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
-    else
-      time = Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
     end
 
     @token.type = :TIME
