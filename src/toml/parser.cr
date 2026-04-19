@@ -61,7 +61,7 @@ class TOML::Parser
     table[key] = value
   end
 
-  private def parse_key(table, double_ending = false)
+  private def parse_key(table, double_ending = false, &)
     @names.clear
 
     loop do
@@ -227,7 +227,7 @@ class TOML::Parser
     end
   end
 
-  private def parse_header(table, double_ending = false)
+  private def parse_header(table, double_ending = false, &)
     @names.clear
 
     loop do
