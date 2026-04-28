@@ -1,6 +1,6 @@
 # toml.cr
 
-[![Build Status](https://travis-ci.org/crystal-community/toml.cr.png)](https://travis-ci.org/crystal-community/toml.cr)
+[![CI](https://github.com/crystal-community/toml.cr/actions/workflows/ci.yml/badge.svg)](https://github.com/crystal-community/toml.cr/actions/workflows/ci.yml)
 
 A [TOML](https://github.com/toml-lang/toml) parser for [Crystal](http://crystal-lang.org/), compliant with the v0.5.0 version of TOML.
 
