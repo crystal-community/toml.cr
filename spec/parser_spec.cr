@@ -28,8 +28,6 @@ private def it_raises(string, file = __FILE__, line = __LINE__)
   end
 end
 
-time_local = Time.local
-
 describe Parser do
   it_parses "", {} of String => Any
   it_parses "a = true", {"a" => true}
@@ -47,26 +45,33 @@ describe Parser do
   it_parses %('quoted "value"' = "value"), { %(quoted "value") => "value" }
   it_parses %(quoted = 'Tom "Dubs" Preston-Werner'), {"quoted" => "Tom \"Dubs\" Preston-Werner"}
 
-  it_parses %(
+  it_parses <<-TOML,
     hello = true
     world = false
-    ),
+    TOML
     {"hello" => true, "world" => false}
 
-  it_parses %(
+  it_parses <<-TOML,
     true = false
     false = true
-    ),
+    TOML
     {"true" => false, "false" => true}
 
   it_parses "a = 987_654", {"a" => 987_654}
   it_parses "a = 1.0", {"a" => 1.0}
 
-  it_parses %(
+  it "parses long fractional parts with and without separators" do
+    compact = "1." + "1" * 200_000
+    grouped = "1.1" + "_1" * 199_999
+    TOML.parse("a = #{compact}")["a"].as_f.should eq(1.1111111111111112)
+    TOML.parse("a = #{grouped}e+1")["a"].as_f.should eq(11.11111111111111)
+  end
+
+  it_parses <<-TOML,
     a = inf
     b = +inf
     c = -inf
-    ),
+    TOML
     {
       "a" => Float64::INFINITY,
       "b" => Float64::INFINITY,
@@ -75,6 +80,19 @@ describe Parser do
 
   it_parses %(inf = 123), {"inf" => 123}
   it_parses %(nan = 123), {"nan" => 123}
+
+  it "rounds floating-point underflow to signed zero" do
+    TOML.parse("x = -1e-400")["x"].as_f.unsafe_as(UInt64).should eq(0x8000_0000_0000_0000_u64)
+    TOML.parse("x = 2e-324")["x"].as_f.unsafe_as(UInt64).should eq(0_u64)
+    TOML.parse("x = 4e-324")["x"].as_f.unsafe_as(UInt64).should eq(1_u64)
+    TOML.parse("x = -1e-99999999999999999999")["x"].as_f.unsafe_as(UInt64).should eq(0x8000_0000_0000_0000_u64)
+    TOML.parse("x = -0.#{"0" * 400}1")["x"].as_f.unsafe_as(UInt64).should eq(0x8000_0000_0000_0000_u64)
+  end
+
+  it "rejects overflow in finite float literals" do
+    expect_raises(TOML::ParseException, /float out of range/) { TOML.parse("x = 1e400") }
+    expect_raises(TOML::ParseException, /float out of range/) { TOML.parse("x = 1e99999999999999999999") }
+  end
 
   # Float64::NAN cannot be compared
   # it_parses %(
@@ -92,137 +110,143 @@ describe Parser do
   it_parses "a = 1979-05-27T07:32:00Z", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
   it_parses "a = 1979-05-27T00:32:00+07:00", {"a" => Time.utc(1979, 5, 26, 17, 32, 0)}
 
+  it "applies the offset before checking the UTC year range" do
+    TOML.parse("a = 0000-12-31T23:59:59.123456789-00:01")["a"].raw
+      .should eq(Time.utc(1, 1, 1, 0, 0, 59, nanosecond: 123_456_789))
+    TOML.parse("a = 0000-12-31T23:59:00-00:01")["a"].raw.should eq(Time.utc(1, 1, 1))
+
+    expect_raises(TOML::ParseException) { TOML.parse("a = 0000-12-31T23:58:59-00:01") }
+    expect_raises(TOML::ParseException) { TOML.parse("a = 0000-12-30T23:59:59-23:59") }
+    expect_raises(TOML::ParseException) { TOML.parse("a = 9999-12-31T23:59:59-00:01") }
+  end
+
   it_parses "a = 1979-05-27T00:32:00.999999-07:00",
     {"a" => Time.utc(1979, 5, 27, 7, 32, 0, nanosecond: 999999 * 1000)}
 
   it_parses "a = 1979-05-27T00:32:00.999999",
-    {"a" => Time.local(1979, 5, 27, 0, 32, 0, nanosecond: 999999 * 1000)}
+    {"a" => Any.new(LocalDateTime.new(LocalDate.new(1979, 5, 27), LocalTime.new(0, 32, nanosecond: 999_999_000)))}
 
   it_parses "a = 1979-05-27 07:32:00Z", {"a" => Time.utc(1979, 5, 27, 7, 32, 0)}
 
-  it_parses "a = 1979-05-27T00:32:00", {"a" => Time.local(1979, 5, 27, 0, 32, 0)}
+  it_parses "a = 1979-05-27T00:32:00",
+    {"a" => Any.new(LocalDateTime.new(LocalDate.new(1979, 5, 27), LocalTime.new(0, 32)))}
 
-  it_parses "a = 1979-05-27", {"a" => Time.local(1979, 5, 27)}
+  it_parses "a = 1979-05-27", {"a" => Any.new(LocalDate.new(1979, 5, 27))}
 
-  it_parses "a = 1979-05-27  # comment", {"a" => Time.local(1979, 5, 27)}
+  it_parses "a = 1979-05-27  # comment", {"a" => Any.new(LocalDate.new(1979, 5, 27))}
 
-  it_parses "a = 00:32:00",
-    {"a" => Time.local(time_local.year, time_local.month, time_local.day, 0, 32, 0)}
+  it_parses "a = 00:32:00", {"a" => Any.new(LocalTime.new(0, 32))}
 
-  it_parses "a = 00:32:00.999999",
-    {"a" => Time.local(
-      time_local.year,
-      time_local.month,
-      time_local.day,
-      0,
-      32,
-      0,
-      nanosecond: 999999 * 1000)}
+  it_parses "a = 00:32:00.999999", {"a" => Any.new(LocalTime.new(0, 32, nanosecond: 999_999_000))}
 
   it_parses %(a = [ [ 1, 2 ], ["a", "b", "c"] ]), {"a" => [[1, 2], ["a", "b", "c"]]}
   it_parses %(string_array = [ "all", 'strings', """are the same""", '''type''' ]),
     {"string_array" => ["all", "strings", "are the same", "type"]}
-  it_parses %(integers2 = [
+  it_parses <<-TOML, {"integers2" => [1, 2, 3]}
+    integers2 = [
       1, 2, 3
-    ]), {"integers2" => [1, 2, 3]}
+    ]
+    TOML
 
-  it_parses %(integers2 = [
-    1,
-    2,
-  ]), {"integers2" => [1, 2]}
+  it_parses <<-TOML, {"integers2" => [1, 2]}
+    integers2 = [
+      1,
+      2,
+    ]
+    TOML
   it_parses "a = [1, 2, 3]", {"a" => [1, 2, 3]}
   it_parses "a = [[[[]]]]", {"a" => Any.new([Any.new([Any.new([Any.new([] of Any)])])])}
 
   it_parses %(site."google.com" = true), {"site" => {"google.com" => true}}
   it_parses %(3.14159 = "pi"), {"3" => {"14159" => "pi"}}
 
-  it_parses %(
+  it_parses <<-TOML, {"a" => [1, 2, 3]}
     a = [
       1, 2, 3
     ]
-    ), {"a" => [1, 2, 3]}
+    TOML
 
-  it_parses %(
+  it_parses <<-TOML, {"a" => [1, 2, 3]}
     a = [
       1,
       2,
       3,
     ]
-    ), {"a" => [1, 2, 3]}
+    TOML
 
-  it_parses %(
+  it_parses <<-TOML,
     [table]
     one = 1
     two = 2
-    ),
+    TOML
     {"table" => {"one" => 1, "two" => 2}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [table1]
     one = 1
 
     [table2]
     two = 2
-    ),
+    TOML
     {"table1" => Any.new({"one" => Any.new(1)}), "table2" => Any.new({"two" => Any.new(2)})}
 
-  it_parses %(
-      [dog."tater.man"]
-      name = "pug"
-    ),
+  it_parses <<-TOML,
+    [dog."tater.man"]
+    name = "pug"
+    TOML
     {"dog" => {"tater.man" => {"name" => "pug"}}}
 
-  it_parses %(
-      [dog."tater.man"]
-      type.name = "pug"
-    ),
+  it_parses <<-TOML,
+    [dog."tater.man"]
+    type.name = "pug"
+    TOML
     {"dog" => {"tater.man" => {"type" => {"name" => "pug"}}}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [foo.bar.baz]
     one = 1
-    ),
+    TOML
     {"foo" => {"bar" => {"baz" => {"one" => 1}}}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [ foo . bar . baz ]
     one = 1
-    ),
+    TOML
     {"foo" => {"bar" => {"baz" => {"one" => 1}}}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [a.b]
     c = 1
 
     [a]
     d = 2
-    ),
+    TOML
     {"a" => {"b" => {"c" => 1}, "d" => 2}}
 
-  it_parses %(
+  it_parses <<-TOML,
     point = { x = 1, y = 2 }
-    ),
+    TOML
     {"point" => {"x" => 1, "y" => 2}}
 
   it_parses %(animal = { type.name = "pug" }), {"animal" => {"type" => {"name" => "pug"}}}
 
-  it_parses %(
+  it_parses <<-TOML,
     "foo" = 1
-    ),
+    TOML
     {"foo" => 1}
 
-  it_parses %(
+  it_parses <<-TOML,
     [dog."tater.man"]
     type = "pug"
-    ),
+    TOML
     {"dog" => {"tater.man" => {"type" => "pug"}}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [foo]
-    ),
+    TOML
     {"foo" => Table.new}
 
-  it_parses %(
+  it_parses <<-TOML,
     [[products]]
     name = "Hammer"
     sku = 738594937
@@ -233,7 +257,7 @@ describe Parser do
     name = "Nail"
     sku = 284758393
     color = "gray"
-    ),
+    TOML
     {
       "products" => [
         {"name" => "Hammer", "sku" => 738594937},
@@ -242,14 +266,14 @@ describe Parser do
       ],
     }
 
-  it_parses %(
+  it_parses <<-TOML,
     [[fruit]]
     name = "apple"
 
       [fruit.physical]
         color = "red"
         shape = "round"
-    ),
+    TOML
     {
       "fruit" => [
         {
@@ -262,19 +286,19 @@ describe Parser do
       ],
     }
 
-  it_parses %(
+  it_parses <<-TOML,
     [[fruit.variety]]
     name = "red delicious"
-    ),
+    TOML
     {"fruit" => {"variety" => [{"name" => "red delicious"}]}}
 
-  it_parses %(
+  it_parses <<-TOML,
     [[fruit]]
     name = "apple"
 
       [[fruit.variety]]
       name = "red delicious"
-    ),
+    TOML
     {
       "fruit" => [
         {
@@ -286,7 +310,7 @@ describe Parser do
       ],
     }
 
-  it_parses %(
+  it_parses <<-TOML,
     [[fruit]]
       name = "apple"
 
@@ -305,7 +329,7 @@ describe Parser do
 
       [[fruit.variety]]
         name = "plantain"
-    ),
+    TOML
     {
       "fruit" => [
         {
@@ -329,18 +353,24 @@ describe Parser do
     }
 
   it_parses_and_eq %(name = { first = "Tom", last = "Preston-Werner" }),
-    %([name]
+    <<-TOML
+      [name]
       first = "Tom"
-      last = "Preston-Werner")
+      last = "Preston-Werner"
+      TOML
 
   it_parses_and_eq %(point = { x = 1, y = 2 }),
-    %([point]
+    <<-TOML
+      [point]
       x = 1
-      y = 2)
+      y = 2
+      TOML
 
   it_parses_and_eq %(animal = { type.name = "pug" }),
-    %([animal]
-      type.name = "pug")
+    <<-TOML
+      [animal]
+      type.name = "pug"
+      TOML
 
   it_raises %(a = [1, 2)
   it_raises %(a = [1,,2])
@@ -354,7 +384,7 @@ describe Parser do
   it_raises %([.])
   it_raises %( = "no key name")
 
-  it_raises %(
+  it_raises <<-TOML
     [[fruit]]
       name = "apple"
 
@@ -363,9 +393,9 @@ describe Parser do
 
       [fruit.variety]
         name = "granny smith"
-    )
+    TOML
 
-  it_raises %(
+  it_raises <<-TOML
     [[fruit]]
       name = "apple"
 
@@ -374,23 +404,23 @@ describe Parser do
 
       [[fruit.variety]]
         name = "red delicious"
-    )
+    TOML
 
-  it_raises "a = [1, false]"
-  it_raises "a = [1, [2]]"
+  it_parses "a = [1, false]", {"a" => [1, false]}
+  it_parses "a = [1, [2]]", {"a" => [1, [2]]}
 
-  it_raises %(
+  it_raises <<-TOML
     a = 1
     a = 2
-    )
+    TOML
 
-  it_raises %(
+  it_raises <<-TOML
     [a]
     [a]
-    )
+    TOML
 
-  it_raises %(
+  it_raises <<-TOML
     [a]b]
     zyx = 42
-  )
+    TOML
 end

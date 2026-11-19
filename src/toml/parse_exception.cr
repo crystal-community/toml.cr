@@ -7,7 +7,7 @@ class TOML::ParseException < Exception
   getter column_number : Int32
 
   # Creates a ParseException with the given message, line number and column number.
-  def initialize(message, @line_number, @column_number)
+  def initialize(message : String, @line_number : Int32, @column_number : Int32) : Nil
     super "#{message} at #{@line_number}:#{@column_number}"
   end
 end

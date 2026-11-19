@@ -1,15 +1,9 @@
 require "./spec_helper"
 
-class TOML::Lexer
-  def before_eq_symbol=(@before_eq_symbol : Bool)
-  end
-end
-
 private def it_lexes(string, expected_type, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
-    lexer.before_eq_symbol = false
-    token = lexer.next_token
+    token = lexer.next_token(value: true)
     token.type.should eq(expected_type)
   end
 end
@@ -26,7 +20,7 @@ end
 private def it_lexes_int(string, value, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
-    token = lexer.next_token
+    token = lexer.next_token(value: true)
     token.type.should eq(:INT)
     token.int_value.should eq(value)
   end
@@ -35,8 +29,7 @@ end
 private def it_lexes_float(string, value, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
-    lexer.before_eq_symbol = false
-    token = lexer.next_token
+    token = lexer.next_token(value: true)
     token.type.should eq(:FLOAT)
     token.float_value.should eq(value)
   end
@@ -54,8 +47,7 @@ end
 private def it_lexes_time(string, value, file = __FILE__, line = __LINE__)
   it "lexes #{string.inspect}", file, line do
     lexer = Lexer.new string
-    lexer.before_eq_symbol = false
-    token = lexer.next_token
+    token = lexer.next_token(value: true)
     token.type.should eq(:TIME)
     token.time_value.should eq(value)
   end
@@ -65,8 +57,7 @@ private def it_raises(string, file = __FILE__, line = __LINE__)
   it "raises on lex #{string.inspect}", file, line do
     expect_raises ParseException do
       lexer = Lexer.new(string)
-      lexer.before_eq_symbol = false
-      while lexer.next_token.type != :EOF
+      while lexer.next_token(value: true).type != :EOF
         # Nothing
       end
     end
@@ -129,7 +120,7 @@ describe Lexer do
   it_lexes_string %("hello"), "hello"
   it_lexes_string %("hi \\b\\t\\n\\f\\r\\"\\\\ there"), "hi \b\t\n\f\r\"\\ there"
   it_lexes_string %("hi \\u1234 there"), "hi \u1234 there"
-  it_lexes_string %("hi \\u00001234 there"), "hi \u1234 there"
+  it_lexes_string %("hi \\U00001234 there"), "hi \u1234 there"
   it_lexes_string %(""), ""
   it_lexes_string %("""hello"""), "hello"
   it_lexes_string %("""\nhello"""), "hello"
@@ -199,9 +190,9 @@ describe Lexer do
   it_raises %("\\u1")
   it_raises %("\\u12")
   it_raises %("\\u123")
-  it_raises %("\\u12345")
-  it_raises %("\\u123456")
-  it_raises %("\\u1234567")
+  it_lexes_string %("\\u12345"), "\u12345"
+  it_lexes_string %("\\u123456"), "\u123456"
+  it_lexes_string %("\\u1234567"), "\u1234567"
   it_raises %("hello\nworld")
   it_raises %(1.)
   it_raises %("\\xAg")
