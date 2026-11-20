@@ -5,3 +5,5 @@ crystal: ">= 1.0.0"
 
 authors:
   - Ary Borenszweig <aborenszweig@manas.com.ar>
+
+license: MIT
