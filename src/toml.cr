@@ -14,9 +14,10 @@ module TOML
   end
 
   # Parses a file.
-  def self.parse_file(filename) : TOML::Table
+  def self.parse_file(filename : String | Path) : TOML::Table
     parse File.read(filename)
   end
 end
 
+require "./toml/temporal"
 require "./toml/*"

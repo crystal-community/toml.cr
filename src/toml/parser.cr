@@ -1,116 +1,160 @@
 # :nodoc:
 class TOML::Parser
-  def self.parse(input) : Table
+  private enum TableKind
+    Implicit
+    Header
+    Dotted
+    Inline
+  end
+
+  # The output keeps its public Hash/Array representation. Track how containers
+  # were declared by identity while parsing, since their contents can change.
+  @table_kinds = Hash(Table, TableKind).new.compare_by_identity
+  @arrays_of_tables = Set(Array(Any)).new.compare_by_identity
+
+  def self.parse(input : String | IO) : Table
     new(input).parse
   end
 
-  def self.new(string : String)
+  def self.new(string : String) : self
     new(IO::Memory.new(string))
   end
 
-  def initialize(io : IO)
+  def initialize(io : IO) : Nil
     @lexer = Lexer.new(io)
-    @names = [] of String
     next_token
   end
 
   def parse : Table
-    root_table = Table.new
-    table = root_table
+    root = Table.new
+    table = root
 
-    loop do
-      case token.type
-      when :EOF
-        break
-      when :NEWLINE
+    until token.type == :EOF
+      if token.type == :NEWLINE
         next_token
-      when :KEY, :INT, :STRING
-        parse_key_value(table)
-        case token.type
-        when :NEWLINE
-          next_token
-        when :EOF
-          # Nothing
-        else
-          unexpected_token
-        end
-      when :"["
-        table = parse_table_header(root_table)
-      else
-        unexpected_token
+        next
       end
+
+      if token.type == :"["
+        table = parse_header(root)
+      else
+        parse_key_value(table)
+      end
+
+      unexpected_token unless token.type.in?(:EOF, :NEWLINE)
     end
 
-    root_table
+    root
   end
 
-  private def parse_key_value(root_table)
-    table, key = parse_key(root_table) do |table, name, has_more_names|
-      handle_table table, name, has_more_names
+  private def parse_key_value(table)
+    key = parse_key do |name|
+      if entry = table[name]?
+        child = entry.as_h?
+        unless child && @table_kinds[child].in?(TableKind::Implicit, TableKind::Dotted)
+          invalid("cannot extend #{name.inspect} with a dotted key")
+        end
+        @table_kinds[child] = TableKind::Dotted
+        table = child
+      else
+        table = add_table(table, name, TableKind::Dotted)
+      end
     end
 
     check :"="
-    next_token
-
-    if table.has_key?(key)
-      raise "duplicated key: '#{key}'"
-    end
-
-    value = parse_value
-    value.is_static_array = value.raw.is_a?(Array)
-    table[key] = value
+    invalid("duplicate key #{key.inspect}") if table.has_key?(key)
+    next_token(value: true)
+    table[key] = parse_value
   end
 
-  private def parse_key(table, double_ending = false, &)
-    @names.clear
-
+  private def parse_key(&)
     loop do
-      case token.type
-      when :KEY, :STRING, :INT
-        if token.type == :INT
-          name = token.int_value.to_s
-        else
-          name = token.string_value
-        end
-        @names << name
-        next_token
+      key_token = token.type == :KEY || (token.type == :STRING && !token.multiline?)
+      unexpected_token unless key_token
+      name = token.string_value
+      next_token
+      return name unless token.type == :"."
 
-        has_more_names = token.type == :"."
-
-        unless has_more_names
-          return {table, name}
-        end
-
-        table = yield table, name, has_more_names
-
-        case token.type
-        when :"."
-          next_token
-          unexpected_token if token.type == :"."
-        end
-      else
-        unexpected_token
-      end
+      yield name
+      next_token
     end
-
-    unexpected_token
   end
 
-  private def parse_key_value_after_key(table)
-    parse_key_value(table)
+  private def parse_header(table)
+    opening_column = token.column_number
+    next_token
+    array = token.type == :"[" && token.column_number == opening_column + 1
+    next_token if array
+
+    key = parse_key do |name|
+      table = header_parent(table, name)
+    end
+
+    check :"]"
+    closing_column = token.column_number
+    next_token
+    if array
+      unless token.type == :"]" && token.column_number == closing_column + 1
+        invalid("expected adjacent closing brackets")
+      end
+      next_token
+      append_table(table, key)
+    elsif entry = table[key]?
+      child = entry.as_h?
+      unless child && @table_kinds[child].implicit?
+        invalid("cannot redefine table #{key.inspect}")
+      end
+      @table_kinds[child] = TableKind::Header
+      child
+    else
+      add_table(table, key, TableKind::Header)
+    end
+  end
+
+  private def header_parent(table, name)
+    entry = table[name]?
+    return add_table(table, name, TableKind::Implicit) unless entry
+
+    if child = entry.as_h?
+      return child unless @table_kinds[child].inline?
+    elsif array = entry.as_a?
+      return array.last.as_h if @arrays_of_tables.includes?(array)
+    end
+
+    invalid("cannot use #{name.inspect} as a parent table")
+  end
+
+  private def append_table(table, key)
+    if entry = table[key]?
+      array = entry.as_a?
+      unless array && @arrays_of_tables.includes?(array)
+        invalid("cannot redefine #{key.inspect} as an array of tables")
+      end
+    else
+      array = [] of Any
+      table[key] = Any.new(array)
+      @arrays_of_tables.add(array)
+    end
+
+    child = new_table(TableKind::Header)
+    array << Any.new(child)
+    child
+  end
+
+  private def new_table(kind)
+    Table.new.tap { |table| @table_kinds[table] = kind }
+  end
+
+  private def add_table(parent, name, kind)
+    new_table(kind).tap { |table| parent[name] = Any.new(table) }
   end
 
   private def parse_value : Any
     value = case token.type
-            when :KEY
-              case token.string_value
-              when "true"
-                true.tap { next_token }
-              when "false"
-                false.tap { next_token }
-              else
-                unexpected_token
-              end
+            when :TRUE
+              true.tap { next_token }
+            when :FALSE
+              false.tap { next_token }
             when :INT
               token.int_value.tap { next_token }
             when :FLOAT
@@ -126,231 +170,64 @@ class TOML::Parser
             else
               unexpected_token
             end
-    Any.new value
-  end
-
-  private def handle_table(table, name, has_more_names) : Table
-    if existing_value = table[name]?
-      raw = existing_value.raw
-      case raw
-      when Hash
-        if !has_more_names && raw.empty?
-          raise "table #{@names.join '.'} already defined"
-        end
-
-        table = raw
-      when Array
-        unless has_more_names
-          raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-        end
-
-        if last_element = raw.last?
-          le_raw = last_element.raw
-          if le_raw.is_a?(Hash)
-            table = le_raw
-          else
-            raise "expected #{@names.join '.'} to be a Table of Array, not #{existing_value}"
-          end
-        else
-          table = Table.new
-          raw << Any.new(table)
-        end
-      else
-        raise "expected #{@names.join '.'} to be a Table, not #{existing_value}"
-      end
-    else
-      new_table = Table.new
-      table[name] = Any.new new_table
-      table = new_table
-    end
-
-    table
-  end
-
-  private def parse_table_header(root_table)
-    next_token
-
-    if token.type == :"["
-      # Array of Tables
-      next_token
-      return parse_array_table_header(root_table)
-    end
-
-    # Table
-    parse_header(root_table) do |table, name, has_more_names|
-      raise "Cannot append to static array array" if root_table[name]? && root_table[name].is_static_array?
-      handle_table(table, name, has_more_names)
-    end
-  end
-
-  private def parse_array_table_header(root_table)
-    parse_header(root_table, double_ending: true) do |table, name, has_more_names|
-      if existing_value = table[name]?
-        raise "Cannot append to static array" if existing_value.is_static_array?
-        raw = existing_value.raw
-        case raw
-        when Array
-          array = raw
-          if array.empty? || !has_more_names
-            table = Table.new
-            array << Any.new(table)
-          else
-            last = array.last.raw
-            unless last.is_a?(Table)
-              raise "expected #{@names.join '.'} to be an Array of Table, not #{existing_value}"
-            end
-
-            table = last
-          end
-        when Hash
-          if has_more_names
-            table = raw
-          else
-            raise "expected #{@names.join '.'} to be an Array, not #{existing_value}"
-          end
-        else
-          raise "expected #{@names.join '.'} to be an Array, not #{existing_value}"
-        end
-      else
-        if has_more_names
-          new_table = Table.new
-          table[name] = Any.new new_table
-          table = new_table
-        else
-          array = [] of Any
-          table[name] = Any.new array
-          table = Table.new
-          array << Any.new table
-        end
-      end
-      table
-    end
-  end
-
-  private def parse_header(table, double_ending = false, &)
-    @names.clear
-
-    loop do
-      case token.type
-      when :KEY, :STRING, :INT
-        if token.type == :INT
-          name = token.int_value.to_s
-        else
-          name = token.string_value
-        end
-        @names << name
-        next_token
-
-        has_more_names = token.type == :"."
-
-        table = yield table, name, has_more_names
-
-        case token.type
-        when :"."
-          next_token
-          unexpected_token if token.type == :"."
-        when :"]"
-          next_token
-
-          if double_ending
-            check :"]"
-            next_token
-          end
-
-          case token.type
-          when :EOF, :NEWLINE
-            return table
-          else
-            unexpected_token
-          end
-        end
-      else
-        unexpected_token
-      end
-    end
-
-    unexpected_token
+    Any.new(value)
   end
 
   private def parse_array
-    next_token
+    array = [] of Any
+    next_token(value: true)
+    skip_newlines(value: true)
 
-    ary = [] of Any
-    previous_value : Any::Type? = nil
+    until token.type == :"]"
+      array << parse_value
+      skip_newlines
+      break if token.type == :"]"
 
-    loop do
-      case token.type
-      when :NEWLINE
-        next_token
-        next
-      when :"]"
-        next_token
-        break
-      else
-        new_value = parse_value
-        ary << new_value
-
-        if previous_value && previous_value.class != new_value.raw.class
-          raise "cannot mix types in array"
-        end
-
-        previous_value = new_value.raw
-
-        case token.type
-        when :NEWLINE
-          next_token
-          check :"]"
-          next_token
-          break
-        when :","
-          next_token
-        when :"]"
-          next_token
-          break
-        else
-          raise "expected ',', ']' or newline, not #{token}"
-        end
-      end
+      check :","
+      next_token(value: true)
+      skip_newlines(value: true)
     end
 
-    ary
+    next_token
+    array
   end
 
   private def parse_inline_table
+    table = new_table(TableKind::Inline)
     next_token
+    skip_newlines
 
-    table = Table.new
-    loop do
-      case token.type
-      when :KEY, :STRING, :INT
-        parse_key_value_after_key(table)
+    until token.type == :"}"
+      parse_key_value(table)
+      skip_newlines
+      break if token.type == :"}"
 
-        if token.type == :","
-          next_token
-        end
-
-        if token.type == :"}"
-          next_token
-          break
-        end
-      else
-        unexpected_token
-      end
+      check :","
+      next_token
+      skip_newlines
     end
+
+    next_token
     table
+  end
+
+  private def skip_newlines(*, value : Bool = false)
+    while token.type == :NEWLINE
+      next_token(value: value)
+    end
   end
 
   private delegate token, next_token, to: @lexer
 
-  private def check(token_type)
-    raise "expecting token '#{token_type}', not '#{token}'" unless token_type == token.type
+  private def check(type)
+    invalid("expected #{type}, got #{token}") unless token.type == type
   end
 
-  private def raise(msg)
-    ::raise ParseException.new(msg, token.line_number, token.column_number)
+  private def unexpected_token : NoReturn
+    invalid("unexpected token #{token}")
   end
 
-  private def unexpected_token
-    raise "unexpected token '#{token}'"
+  private def invalid(message) : NoReturn
+    raise ParseException.new(message, token.line_number, token.column_number)
   end
 end

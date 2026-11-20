@@ -22,28 +22,23 @@
 # which return `nil` when the underlying value type won't match.
 struct TOML::Any
   # All possible TOML types.
-  alias Type = Bool | Int64 | Float64 | String | Time | Array(TOML::Any) | Hash(String, TOML::Any)
+  alias Type = Bool | Int64 | Float64 | String | TOML::Temporal | Array(TOML::Any) | Hash(String, TOML::Any)
 
   # Returns the raw underlying value.
   getter raw : Type
 
-  # Is the type a static array?
-  #
-  # These types cannot be modified
-  protected property? is_static_array = false
-
   # Creates a `TOML::Any` that wraps the given value.
-  def initialize(@raw : Type)
+  def initialize(@raw : Type) : Nil
   end
 
   # :ditto:
-  def self.new(raw : Int)
+  def self.new(raw : Int) : self
     # FIXME: Workaround for https://github.com/crystal-lang/crystal/issues/11645
     new(raw.to_i64)
   end
 
   # :ditto:
-  def self.new(raw : Float)
+  def self.new(raw : Float) : self
     # FIXME: Workaround for https://github.com/crystal-lang/crystal/issues/11645
     new(raw.to_f64)
   end
@@ -111,7 +106,7 @@ struct TOML::Any
 
   # Traverses the depth of a structure and returns the value.
   # Returns `nil` if not found.
-  def dig?(index_or_key : String | Int, *subkeys) : TOML::Any?
+  def dig?(index_or_key : String | Int, *subkeys : String | Int) : TOML::Any?
     self[index_or_key]?.try &.dig?(*subkeys)
   end
 
@@ -120,13 +115,11 @@ struct TOML::Any
     case @raw
     when Hash, Array
       self[index_or_key]?
-    else
-      nil
     end
   end
 
   # Traverses the depth of a structure and returns the value, otherwise raises.
-  def dig(index_or_key : String | Int, *subkeys) : TOML::Any
+  def dig(index_or_key : String | Int, *subkeys : String | Int) : TOML::Any
     self[index_or_key].dig(*subkeys)
   end
 
@@ -208,12 +201,8 @@ struct TOML::Any
   # Returns `nil` otherwise.
   def as_f32? : Float32?
     case raw = @raw
-    when Int
+    when Int, Float
       raw.to_f32
-    when Float
-      raw.to_f32
-    else
-      nil
     end
   end
 
@@ -267,12 +256,12 @@ struct TOML::Any
   end
 
   # Returns `true` if both `self` and *other*'s raw object are equal.
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     raw == other.raw
   end
 
   # Returns `true` if the raw object is equal to *other*.
-  def ==(other)
+  def ==(other : Object) : Bool
     raw == other
   end
 
@@ -280,54 +269,54 @@ struct TOML::Any
   def_hash raw
 
   # Returns a new TOML::Any instance with the `raw` value `dup`ed.
-  def dup
+  def dup : self
     TOML::Any.new(raw.dup)
   end
 
   # Returns a new TOML::Any instance with the `raw` value `clone`ed.
-  def clone
+  def clone : self
     TOML::Any.new(raw.clone)
   end
 end
 
 class Object
-  def ===(other : TOML::Any)
+  def ===(other : TOML::Any) : Bool
     self === other.raw
   end
 end
 
 struct Value
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     self == other.raw
   end
 end
 
 class Reference
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     self == other.raw
   end
 end
 
 struct Time
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     self == other.raw
   end
 end
 
 class Array
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     self == other.raw
   end
 end
 
 class Hash
-  def ==(other : TOML::Any)
+  def ==(other : TOML::Any) : Bool
     self == other.raw
   end
 end
 
 class Regex
-  def ===(other : TOML::Any)
+  def ===(other : TOML::Any) : Bool
     value = self === other.raw
     $~ = $~
     value

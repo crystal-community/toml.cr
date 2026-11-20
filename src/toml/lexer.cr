@@ -1,656 +1,404 @@
 # :nodoc:
 class TOML::Lexer
-  getter token
-  @peeked : Char? = nil
+  private DECIMAL   = /\A[+-]?(?:0|[1-9](?:_?[0-9])*+)\z/
+  private BINARY    = /\A0b[01](?:_?[01])*+\z/
+  private OCTAL     = /\A0o[0-7](?:_?[0-7])*+\z/
+  private HEX       = /\A0x[0-9a-fA-F](?:_?[0-9a-fA-F])*+\z/
+  private FLOAT     = /\A[+-]?(?:0|[1-9](?:_?[0-9])*+)(?:\.[0-9](?:_?[0-9])*+(?:[eE][+-]?[0-9](?:_?[0-9])*+)?|[eE][+-]?[0-9](?:_?[0-9])*+)\z/
+  private DATE      = /\A([0-9]{4})-([0-9]{2})-([0-9]{2})\z/
+  private DATE_TIME = /\A([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt ]([^Tt ]+)\z/
+  private CLOCK     = /\A([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]+))?)?([Zz]|[+-][0-9]{2}:[0-9]{2})?\z/
 
-  def self.new(string : String)
+  private PUNCTUATION = {
+    '[' => :"[",
+    ']' => :"]",
+    '{' => :"{",
+    '}' => :"}",
+    '.' => :".",
+    ',' => :",",
+    '=' => :"=",
+  }
+
+  private SPECIAL_FLOATS = {
+    "inf"  => Float64::INFINITY,
+    "+inf" => Float64::INFINITY,
+    "-inf" => -Float64::INFINITY,
+    "nan"  => Float64::NAN,
+    "+nan" => Float64::NAN,
+    "-nan" => -Float64::NAN,
+  }
+
+  getter token : Token
+  @current : Char?
+  @lookahead : Char? = nil
+  @line = 1
+  @column = 1
+
+  def self.new(string : String) : self
     new(IO::Memory.new(string))
   end
 
-  def initialize(@input : IO)
-    @current_char = @input.read_char || '\0'
+  def initialize(@input : IO) : Nil
     @token = Token.new
-    @line_number = 1
-    @column_number = 1
-    @before_eq_symbol = true
+    @current = read_char
   end
 
-  def next_token : Token
-    skip_whitespace
+  def next_token(*, value : Bool = false) : Token
+    skip_horizontal_space
     skip_comment
+    @token.line_number = @line
+    @token.column_number = @column
+    @token.multiline = false
 
-    @token.line_number = @line_number
-    @token.column_number = @column_number
-
-    case current_char
-    when '\0'
-      @token.type = :EOF
-    when '\r'
-      if next_char == '\n'
-        consume_newline
-      else
-        raise "expected '\\n' after '\\r'"
-      end
-    when '\n'
-      consume_newline
-    when '['
-      next_char :"["
-    when ']'
-      next_char :"]"
-    when '{'
-      unless @before_eq_symbol
-        @before_eq_symbol = false
-      end
-      next_char :"{"
-    when '}'
-      next_char :"}"
-    when '.'
-      next_char :"."
-    when ','
-      next_char :","
-    when '='
-      @before_eq_symbol = false
-      next_char :"="
-    when '0'
-      consume_number leading_zero: true
-    when '1'..'9'
-      consume_number
-    when '+'
-      next_char
-      case current_char
-      when '0'..'9'
-        consume_number
-      when 'a'..'z'
-        consume_math_constant
-      when unexpected_char
-      end
-    when '-'
-      case next_char
-      when '0'..'9'
-        consume_number negative: true
-      when 'a'..'z'
-        consume_math_constant negative: true
-      when unexpected_char
-      end
-    when '"'
-      consume_string
-    when '\''
-      consume_literal_string
-    else
-      if key_part? current_char
-        consume_key
-      else
-        unexpected_char
-      end
-    end
-
+    @token.type = case char = @current
+                  when nil
+                    :EOF
+                  when '\n', '\r'
+                    while newline?
+                      consume_newline
+                    end
+                    :NEWLINE
+                  when '"', '\''
+                    consume_string(char)
+                    :STRING
+                  else
+                    if punctuation = PUNCTUATION[char]?
+                      advance
+                      punctuation
+                    elsif value
+                      consume_value
+                    elsif bare_key_char?(char)
+                      @token.string_value = String.build do |io|
+                        while (part = @current) && bare_key_char?(part)
+                          io << part
+                          advance
+                        end
+                      end
+                      :KEY
+                    else
+                      invalid("unexpected character #{char.inspect}")
+                    end
+                  end
     @token
   end
 
-  private def consume_newline
-    @line_number += 1
-    @column_number = 0
-    loop do
-      case next_char
-      when '\r'
-        unless next_char == '\n'
-          raise "expected '\\n' after '\\r'"
-        end
-      when '\n'
-        # Nothing
+  private def consume_value
+    text = read_value_atom
+    case
+    when text == "true"
+      :TRUE
+    when text == "false"
+      :FALSE
+    when DECIMAL.matches?(text)
+      integer(text, 10)
+    when BINARY.matches?(text)
+      integer(text.byte_slice(2), 2)
+    when OCTAL.matches?(text)
+      integer(text.byte_slice(2), 8)
+    when HEX.matches?(text)
+      integer(text.byte_slice(2), 16)
+    when FLOAT.matches?(text)
+      text = text.delete('_') if text.includes?('_')
+      @token.float_value = parse_float(text)
+      :FLOAT
+    else
+      if float = SPECIAL_FLOATS[text]?
+        @token.float_value = float
+        :FLOAT
       else
-        break
+        @token.time_value = parse_temporal(text)
+        :TIME
       end
-      @line_number += 1
-      @column_number = 0
-      @before_eq_symbol = true
     end
-    @token.line_number = @line_number
-    @token.column_number = @column_number
-    @token.type = :NEWLINE
   end
 
-  private def consume_string
-    @token.type = :STRING
+  private def parse_float(text : String) : Float64
+    if value = text.to_f64?
+      return value if value.finite?
+    else
+      # Crystal versions differ on whether rounding to zero reports an error.
+      # The grammar was already checked, so inspect the decimal magnitude to
+      # tell underflow from overflow without going through another float parser.
+      mantissa, _, exponent = text.partition(/[eE]/)
+      if first_digit = mantissa.index(/[1-9]/)
+        point = mantissa.index('.') || mantissa.bytesize
+        shift = exponent.empty? ? 0_i64 : exponent.to_i64?
+        if shift
+          leading_power = point - first_digit - (first_digit < point ? 1 : 0)
+          underflow = shift <= -324_i64 - leading_power
+        else
+          underflow = exponent.starts_with?('-')
+        end
+        invalid("float out of range") unless underflow
+      end
+      return text.starts_with?('-') ? -0.0 : 0.0
+    end
 
-    if next_char == '"'
-      if next_char == '"'
-        consume_multiline_basic_string
+    invalid("float out of range")
+  end
+
+  private def read_value_atom
+    text = read_atom
+    # A date may be followed by a single space and a time.
+    if @current == ' ' && text.bytesize == 10 && DATE.matches?(text) && peek.try(&.ascii_number?)
+      advance
+      text = "#{text} #{read_atom}"
+    end
+    text
+  end
+
+  private def read_atom
+    String.build do |io|
+      while char = @current
+        break if char.in?(' ', '\t', '\r', '\n', '#', ',', ']', '}')
+        io << char
+        advance
+      end
+    end
+  end
+
+  private def integer(text, base)
+    @token.int_value = text.to_i64?(base, underscore: true) || invalid("integer out of range")
+    :INT
+  end
+
+  private def parse_temporal(text) : TOML::Temporal
+    if date_time = DATE_TIME.match(text)
+      date = parse_date(date_time)
+      clock, offset = parse_clock(date_time[4])
+      if offset
+        offset_time(date, clock, offset)
       else
+        TOML::LocalDateTime.new(date, clock)
+      end
+    elsif date = DATE.match(text)
+      parse_date(date)
+    elsif text.includes?(':')
+      clock, offset = parse_clock(text)
+      invalid("a time without a date cannot have an offset") if offset
+      clock
+    else
+      invalid("invalid value #{text.inspect}")
+    end
+  rescue error : ArgumentError
+    invalid(error.message || "invalid date or time")
+  end
+
+  private def offset_time(date : TOML::LocalDate, clock : TOML::LocalTime, offset : Int32) : Time
+    if date.year.zero?
+      # A valid offset can advance December 31 into year 1. Use January 1
+      # as the base date and account for the extra day in the subtraction.
+      invalid("offset date-time precedes year 1 UTC") unless date.month == 12 && date.day == 31
+      date = TOML::LocalDate.new(1, 1, 1)
+      offset += 24 * 60
+    end
+
+    Time.utc(date.year, date.month, date.day, clock.hour, clock.minute, clock.second,
+      nanosecond: clock.nanosecond) - offset.minutes
+  end
+
+  private def parse_date(match)
+    TOML::LocalDate.new(match[1].to_i, match[2].to_i, match[3].to_i)
+  end
+
+  private def parse_clock(text)
+    match = CLOCK.match(text) || invalid("invalid time #{text.inspect}")
+    nanosecond = 0
+    if fraction = match[4]?
+      nanosecond = fraction.byte_slice(0, 9).ljust(9, '0').to_i
+    end
+    clock = TOML::LocalTime.new(match[1].to_i, match[2].to_i, match[3]?.try(&.to_i) || 0,
+      nanosecond: nanosecond)
+    offset = case zone = match[5]?
+             when nil
+               nil
+             when "Z", "z"
+               0
+             else
+               hour = zone.byte_slice(1, 2).to_i
+               minute = zone.byte_slice(4, 2).to_i
+               invalid("invalid UTC offset") unless hour < 24 && minute < 60
+               (hour * 60 + minute) * (zone.starts_with?('-') ? -1 : 1)
+             end
+    {clock, offset}
+  end
+
+  private def consume_string(quote)
+    advance
+    multiline = false
+    if @current == quote
+      advance
+      unless @current == quote
         @token.string_value = ""
-      end
-      return
-    end
-
-    consume_basic_string
-  end
-
-  private def consume_basic_string
-    @token.string_value = String.build do |io|
-      loop do
-        case current_char
-        when '"'
-          next_char
-          break
-        when '\\'
-          next_char
-          consume_escape(io)
-        when '\0'
-          raise "unterminated string literal"
-        when '\n'
-          raise "newline is not allowed in basic string"
-        else
-          io << current_char
-          next_char
-        end
-      end
-    end
-  end
-
-  private def consume_multiline_basic_string
-    if next_char == '\n'
-      newline
-      next_char
-    end
-
-    @token.string_value = String.build do |io|
-      loop do
-        case current_char
-        when '"'
-          if next_char == '"'
-            if next_char == '"'
-              next_char
-              break
-            else
-              io << %("")
-            end
-          else
-            io << '"'
-          end
-          next_char
-        when '\\'
-          if next_char == '\n'
-            newline
-            next_char
-            loop do
-              case current_char
-              when ' ', '\t'
-                next_char
-              when '\n'
-                newline
-                next_char
-              else
-                break
-              end
-            end
-          else
-            consume_escape(io)
-          end
-        when '\n'
-          newline
-          io << '\n'
-          next_char
-        when '\0'
-          raise "unterminated string literal"
-        else
-          io << current_char
-          next_char
-        end
-      end
-    end
-  end
-
-  private def consume_literal_string
-    @token.type = :STRING
-
-    next_char
-
-    if current_char == '\''
-      if next_char == '\''
-        consume_multiline_literal_string
-        return
-      else
-        @token.string_value = ""
         return
       end
-    else
-      consume_basic_literal_string
+      multiline = true
+      advance
+      consume_newline if newline?
     end
-  end
-
-  private def consume_basic_literal_string
-    string = String.build do |io|
-      io << current_char
-      loop do
-        case next_char
-        when '\''
-          next_char
-          break
-        when '\0'
-          raise "unterminated string literal"
-        else
-          io << current_char
-        end
-      end
-    end
-    @token.string_value = string
-  end
-
-  private def consume_multiline_literal_string
-    if next_char == '\n'
-      newline
-      next_char
-    end
-
+    @token.multiline = multiline
     @token.string_value = String.build do |io|
       loop do
-        case current_char
-        when '\''
-          if next_char == '\''
-            if next_char == '\''
-              next_char
-              break
-            else
-              io << %('')
-            end
-          else
-            io << '\''
-            io << current_char
-          end
-        when '\n'
-          newline
+        char = @current || invalid("unterminated string")
+        if char == quote
+          break if consume_string_quotes(io, quote, multiline)
+        elsif char == '\\' && quote == '"'
+          consume_string_escape(io, multiline)
+        elsif multiline && newline?
+          consume_newline
           io << '\n'
-        when '\0'
-          raise "unterminated string literal"
         else
-          io << current_char
-        end
-        next_char
-      end
-    end
-  end
-
-  private def consume_escape(io)
-    case current_char
-    when 'b'
-      io << '\b'
-    when 't'
-      io << '\t'
-    when 'n'
-      io << '\n'
-    when 'f'
-      io << '\f'
-    when 'r'
-      io << '\r'
-    when 'u'
-      io << consume_unicode_scalar
-      return
-    when '\\', '\'', '"'
-      io << current_char
-    else
-      raise "unknown escape: \\#{current_char}"
-    end
-
-    next_char
-  end
-
-  private def consume_unicode_scalar
-    value = 0
-
-    4.times do |i|
-      value = value * 16 + (next_char.to_i?(16) || raise("expecting hexadecimal number"))
-    end
-
-    if char_value = next_char.to_i?(16)
-      value = value * 16 + char_value
-      3.times do |i|
-        value = value * 16 + (next_char.to_i?(16) || raise("expecting hexadecimal number"))
-      end
-      next_char
-    end
-
-    value.chr
-  end
-
-  private def skip_whitespace
-    while current_char == ' ' || current_char == '\t'
-      next_char
-    end
-  end
-
-  private def skip_comment
-    if current_char == '#'
-      loop do
-        case next_char
-        when '\0', '\n'
-          break
+          check_character(char)
+          io << char
+          advance
         end
       end
     end
   end
 
-  private def consume_math_constant(negative = false)
-    string = String.build do |io|
-      loop do
-        case current_char
-        when 'a'..'z'
-          io << current_char
-          next_char
-        else
-          break
-        end
-      end
-    end
-    process_math_constant(string)
+  private def consume_string_quotes(io, quote, multiline) : Bool
+    advance
+    return true unless multiline
 
-    if negative
-      @token.float_value = -@token.float_value
-    end
-  end
-
-  private def process_math_constant(string)
-    case string
-    when "inf"
-      @token.type = :FLOAT
-      @token.float_value = Float64::INFINITY
-    when "nan"
-      @token.type = :FLOAT
-      @token.float_value = Float64::NAN
-    else
-      raise "unexpected math constant #{token}"
-    end
-  end
-
-  private def consume_number(negative = false, leading_zero = false)
-    num = 0_i64
-    num += current_char.to_i
     count = 1
-    last_is_underscore = false
-    has_underscore = false
-
-    loop do
-      case next_char
-      when '0'..'9'
-        num = num * 10 + current_char.to_i
-        last_is_underscore = false
-        count += 1
-      when '_'
-        if last_is_underscore
-          raise "double underscores in a number are now allowed"
-        else
-          last_is_underscore = true
-          has_underscore = true
-        end
-      else
-        break
-      end
+    while @current == quote
+      count += 1
+      invalid("too many closing quotes") if count > 5
+      advance
     end
 
-    unless @before_eq_symbol
-      case current_char
-      when '-'
-        if count == 4 && !has_underscore && !negative
-          return consume_datetime num
-        else
-          unexpected_char
-        end
-      when '.'
-        return consume_float(negative, num)
-      when ':'
-        if count == 2 && !has_underscore && !negative
-          return consume_time num
-        else
-          unexpected_char
-        end
-      when 'e', 'E'
-        return consume_exponent(negative, num)
-      end
-    end
-
-    if leading_zero && num != 0
-      raise "numbers with leading zero are not allowed"
-    end
-
-    num *= -1 if negative
-
-    @token.type = :INT
-    @token.int_value = num
-  end
-
-  private def consume_float(negative, integer)
-    divisor = 1_u64
-    last_is_underscore = false
-    next_char
-    loop do
-      case current_char
-      when '0'..'9'
-        integer *= 10
-        integer += current_char.to_i
-        divisor *= 10
-        next_char
-        last_is_underscore = false
-      when '_'
-        if last_is_underscore
-          raise "double underscores in a number are now allowed"
-        else
-          last_is_underscore = true
-          next_char
-        end
-      else
-        break
-      end
-    end
-
-    if divisor == 1
-      raise "expecting float decimal digit"
-    end
-
-    float = integer.to_f64 / divisor
-
-    case current_char
-    when 'e', 'E'
-      consume_exponent(negative, float)
-    else
-      @token.type = :FLOAT
-      @token.float_value = negative ? -float : float
-    end
-  end
-
-  private def consume_exponent(negative, float)
-    exponent = 0
-    negative_exponent = false
-    last_is_underscore = false
-
-    case next_char
-    when '+'
-      next_char
-    when '-'
-      next_char
-      negative_exponent = true
-    end
-
-    if '0' <= current_char <= '9'
-      loop do
-        case current_char
-        when '0'..'9'
-          exponent *= 10
-          exponent += (current_char.ord - '0'.ord)
-          next_char
-          last_is_underscore = false
-        when '_'
-          if last_is_underscore
-            raise "double underscores in a number are now allowed"
-          else
-            last_is_underscore = true
-            next_char
-          end
-        else
-          break
-        end
-      end
-    else
-      unexpected_char
-    end
-
-    @token.type = :FLOAT
-
-    exponent = -exponent if negative_exponent
-    float *= (10_f64 ** exponent)
-    @token.float_value = negative ? -float : float
-  end
-
-  private def consume_time(hour)
-    minute = consume_datetime_component 2, "expected minute digit"
-    raise "expected ':'" unless next_char == ':'
-    second = consume_datetime_component 2, "expected second digit"
-
-    if next_char == '.'
-      microseconds = consume_datetime_component 6, "expected microsecond digit"
-      next_char
-    else
-      microseconds = 0
-    end
-
-    time_local = Time.local
-    time = Time.local(time_local.year, time_local.month, time_local.day, hour.to_i32,
-      minute, second, nanosecond: microseconds * 1000)
-
-    @token.type = :TIME
-    @token.time_value = time
-  end
-
-  private def consume_datetime(year)
-    t_delimiter_with_space = false
-
-    month = consume_datetime_component 2, "expected month digit"
-    raise "expected '-'" unless next_char == '-'
-    day = consume_datetime_component 2, "expected day digit"
-    case next_char
-    when 'T'
-    when ' '
-      t_delimiter_with_space = true
-    else
-      @token.type = :TIME
-      @token.time_value = Time.local(year.to_i32, month, day)
-      return
-    end
-    if t_delimiter_with_space && !peek_next_char.to_i?
-      @token.type = :TIME
-      @token.time_value = Time.local(year.to_i32, month, day)
-      return
-    end
-    hour = consume_datetime_component 2, "expected hour digit"
-    raise "expected ':'" unless next_char == ':'
-    minute = consume_datetime_component 2, "expected minute digit"
-    raise "expected ':'" unless next_char == ':'
-    second = consume_datetime_component 2, "expected second digit"
-
-    if next_char == '.'
-      microseconds = consume_datetime_component 6, "expected microsecond digit"
-      next_char
-    else
-      microseconds = 0
-    end
-
-    local_time = false
-
-    negative = false
-    case current_char
-    when 'Z'
-      next_char
-    when '+', '-'
-      negative = current_char == '-'
-      hour_offset = consume_datetime_component 2, "expected hour offset digit"
-      raise "expected ':'" unless next_char == ':'
-      minute_offset = consume_datetime_component 2, "expected minute offset digit"
-      next_char
-    else
-      local_time = true
-    end
-
-    if local_time
-      time = Time.local(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
-    else
-      time = Time.utc(year.to_i32, month, day, hour, minute, second, nanosecond: microseconds * 1000)
-      time += (negative ? hour_offset : -hour_offset).hours if hour_offset
-      time += (negative ? minute_offset : -minute_offset).minutes if minute_offset
-    end
-
-    @token.type = :TIME
-    @token.time_value = time
-  end
-
-  private def consume_datetime_component(length, error_msg)
-    value = 0
-    length.times do
-      value = 10 * value + (next_char.to_i? || raise(error_msg))
-    end
-    value
-  end
-
-  private def consume_key
-    @token.string_value = String.build do |io|
-      io << current_char
-      while key_part? next_char
-        io << current_char
-      end
-    end
-    @token.type = :KEY
-
-    unless @before_eq_symbol
-      # Process a key if it is a math constant
-      begin
-        process_math_constant(@token.string_value)
-      rescue
-      end
-    end
-  end
-
-  private def key_part?(char)
-    case char
-    when 'a'..'z', 'A'..'Z', '0'..'9', '_', '-'
+    if count >= 3
+      (count - 3).times { io << quote }
       true
     else
+      count.times { io << quote }
       false
     end
   end
 
-  private def current_char
-    @current_char
-  end
-
-  private def peek_next_char : Char
-    if peeked = @peeked
-      return peeked
+  private def consume_string_escape(io, multiline)
+    advance
+    if multiline && (newline? || @current.in?(' ', '\t'))
+      skip_horizontal_space
+      invalid("expected newline after string continuation") unless newline?
+      while newline?
+        consume_newline
+        skip_horizontal_space
+      end
+    else
+      io << consume_escape
     end
-    @peeked = @input.read_char || '\0'
   end
 
-  private def next_char : Char
-    @column_number += 1
-    if peeked = @peeked
-      @peeked = nil
-      return peeked
+  private def consume_escape : Char
+    escaped = @current || invalid("unterminated string escape")
+    advance
+    case escaped
+    when 'b'       then '\b'
+    when 't'       then '\t'
+    when 'n'       then '\n'
+    when 'f'       then '\f'
+    when 'r'       then '\r'
+    when 'e'       then '\e'
+    when 'x'       then consume_scalar(2)
+    when 'u'       then consume_scalar(4)
+    when 'U'       then consume_scalar(8)
+    when '\\', '"' then escaped
+    else                invalid("invalid string escape")
     end
-    c = @current_char = @input.read_char || '\0'
-    c
   end
 
-  private def next_char(token_type)
-    @token.type = token_type
-    next_char
+  private def consume_scalar(length)
+    scalar = 0_u32
+    length.times do
+      char = @current
+      digit = char.try(&.to_i?(16)) || invalid("expected hexadecimal digit in escape")
+      scalar = scalar * 16 + digit.to_u32
+      advance
+    end
+    invalid("invalid Unicode scalar in escape") unless unicode_scalar?(scalar)
+    scalar.chr
   end
 
-  private def newline
-    @token.line_number = @line_number += 1
-    @token.column_number = @column_number = 0
+  private def bare_key_char?(char)
+    char.ascii_alphanumeric? || char.in?('_', '-')
   end
 
-  private def unexpected_char(char = current_char)
-    raise "unexpected char '#{char}'"
+  private def check_character(char)
+    if (char < ' ' && char != '\t') || char == '\u007f'
+      invalid("unexpected control character #{char.inspect}")
+    end
   end
 
-  private def raise(msg)
-    ::raise ParseException.new(msg, @line_number, @column_number)
+  private def skip_horizontal_space
+    while @current.in?(' ', '\t')
+      advance
+    end
+  end
+
+  private def skip_comment
+    return unless @current == '#'
+    advance
+    while (char = @current) && !newline?
+      check_character(char)
+      advance
+    end
+  end
+
+  private def newline?
+    @current.in?('\r', '\n')
+  end
+
+  private def consume_newline
+    if @current == '\r'
+      advance
+      invalid("expected LF after CR") unless @current == '\n'
+    end
+    @line += 1
+    @column = 0
+    advance
+  end
+
+  private def peek
+    @lookahead ||= read_char
+  end
+
+  private def advance
+    @column += 1
+    @current = @lookahead || read_char
+    @lookahead = nil
+  end
+
+  # Decode raw UTF-8 bytes so IO encodings and older Crystal versions cannot
+  # replace or accept malformed byte sequences before TOML validation.
+  private def read_char
+    first = @input.read_byte
+    return if first.nil?
+    return first.chr if first < 0x80
+
+    remaining, minimum = case first
+                         when 0xc2..0xdf then {1, 0x80}
+                         when 0xe0..0xef then {2, 0x800}
+                         when 0xf0..0xf4 then {3, 0x10000}
+                         else                 invalid("invalid UTF-8 leading byte")
+                         end
+
+    scalar = first.to_u32 & (0x7f_u32 >> (remaining + 1))
+    remaining.times do
+      byte = @input.read_byte
+      invalid("invalid UTF-8 continuation byte") unless byte && (byte & 0xc0) == 0x80
+      scalar = (scalar << 6) | (byte & 0x3f)
+    end
+
+    invalid("invalid UTF-8 code point") unless scalar >= minimum && unicode_scalar?(scalar)
+    scalar.chr
+  end
+
+  private def unicode_scalar?(scalar)
+    scalar <= 0x10ffff && !(0xd800..0xdfff).includes?(scalar)
+  end
+
+  private def invalid(message) : NoReturn
+    raise ParseException.new(message, @line, @column)
   end
 end
